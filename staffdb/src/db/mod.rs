@@ -1,0 +1,16 @@
+// Database module for staffdb
+// Provides repository abstraction layer, enabling SQLite now and PostgreSQL later
+
+pub mod migrations;
+pub mod pool;
+pub mod repository;
+
+pub use pool::DbPool;
+pub use repository::{
+	AccountRepository,
+	AuditLogRepository,
+	RoleRepository,
+	SqliteAccountRepository,
+	SqliteAuditLogRepository,
+	SqliteRoleRepository,
+};

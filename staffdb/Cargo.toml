@@ -1,0 +1,65 @@
+[package]
+name = "stellarae_staffdb"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "StellaraeSecure staff and user account database service"
+license = "MIT"
+repository = "https://github.com/stellarae/StellaraeSecure"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.36", features = ["full"] }
+
+# Web framework
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database (SQLite first, designed for PostgreSQL later)
+sqlx = { version = "0.7", features = ["runtime-tokio-sqlite", "sqlite", "uuid", "chrono", "json"] }
+
+# UUID and time
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Passwords and crypto
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+
+# Error handling
+thiserror = "1.0"
+
+# Configuration
+dotenv = "0.15"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# Type safety and validation
+regex = "1.10"
+
+# Async trait support
+async-trait = "0.1"
+
+# Rate limiting
+governor = "0.10"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[bin]]
+name = "staffdb"
+path = "src/main.rs"
+
+[lib]
+name = "stellarae_staffdb"
+path = "src/lib.rs"

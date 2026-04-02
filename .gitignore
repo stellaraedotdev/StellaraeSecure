@@ -1,0 +1,4 @@
+# Global .gitignore file for the StellaraeSecure repo,
+# See others in their respecive sub-project directories
+STELLARAE/
+*.log

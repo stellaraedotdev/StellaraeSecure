@@ -1,0 +1,36 @@
+version: '3.9'
+
+services:
+  staffdb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stellarae-staffdb-dev
+    ports:
+      - "3000:3000"
+    environment:
+      STAFFDB_HOST: 0.0.0.0
+      STAFFDB_PORT: 3000
+      DATABASE_URL: sqlite:/app/data/staffdb.sqlite
+      SERVICE_ID: staffdb-dev
+      ENVIRONMENT: development
+      LOG_LEVEL: debug
+    volumes:
+      # Persist SQLite database across container restarts
+      - staffdb-data:/app/data
+    networks:
+      - stellarae
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  stellarae:
+    driver: bridge
+
+volumes:
+  staffdb-data:
+    driver: local
