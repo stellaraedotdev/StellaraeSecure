@@ -2,3 +2,6 @@
 # See others in their respecive sub-project directories
 STELLARAE/
 *.log
+
+# IDE files
+.vscode/
