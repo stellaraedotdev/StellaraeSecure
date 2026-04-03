@@ -1,0 +1,21 @@
+[package]
+name = "stellarae_oauth2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+sha2 = "0.10"
+thiserror = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+url = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
