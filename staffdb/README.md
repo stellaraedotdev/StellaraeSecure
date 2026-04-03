@@ -108,7 +108,7 @@ GET /audit/accounts/{user_id}
 
 ### Prerequisites
 
-- Rust 1.85+ ([install](https://www.rust-lang.org/tools/install))
+- Rust 1.86+ ([install](https://www.rust-lang.org/tools/install))
 - SQLite 3 (pre-installed on macOS/Linux; Windows bundles via rustup)
 
 ### Quick Start

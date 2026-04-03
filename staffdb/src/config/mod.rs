@@ -36,7 +36,7 @@ pub struct Config {
 impl Config {
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self> {
-        dotenv::dotenv().ok();
+        dotenvy::dotenv().ok();
 
         let host = env::var("STAFFDB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
         let port = env::var("STAFFDB_PORT")

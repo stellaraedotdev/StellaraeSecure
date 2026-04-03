@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for StellaraeSecure staffdb
 
 # --- Builder stage ---
-FROM rust:1.85 as builder
+FROM rust:1.86 as builder
 
 WORKDIR /build
 

@@ -2,7 +2,7 @@
 name = "stellarae_staffdb"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.86"
 description = "StellaraeSecure staff and user account database service"
 license = "MIT"
 repository = "https://github.com/stellarae/StellaraeSecure"
@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Database (SQLite first, designed for PostgreSQL later)
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "uuid", "chrono", "json"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "uuid", "chrono", "json"] }
 
 # UUID and time
 uuid = { version = "1.6", features = ["v4", "serde"] }
@@ -38,7 +38,7 @@ rand = "0.8"
 thiserror = "1.0"
 
 # Configuration
-dotenv = "0.15"
+dotenvy = "0.15"
 
 # Logging and tracing
 tracing = "0.1"
