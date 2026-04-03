@@ -108,7 +108,7 @@ GET /audit/accounts/{user_id}
 
 ### Prerequisites
 
-- Rust 1.70+ ([install](https://www.rust-lang.org/tools/install))
+- Rust 1.85+ ([install](https://www.rust-lang.org/tools/install))
 - SQLite 3 (pre-installed on macOS/Linux; Windows bundles via rustup)
 
 ### Quick Start
@@ -151,7 +151,8 @@ See [.env.example](.env.example) for all available configuration options. Key on
 - `SERVICE_ID`: Identifier for logging (e.g., `staffdb-dev`, `staffdb-prod`)
 - `ENVIRONMENT`: `development`, `staging`, or `production`
 - `LOG_LEVEL`: `trace`, `debug`, `info`, `warn`, or `error`
-- `SERVICE_API_KEYS`: Comma-separated allow-list of inbound service API keys
+- `SERVICE_API_KEYS`: Comma-separated `service_id:key` credentials for inbound service auth
+- `PRIVILEGED_SERVICES`: Comma-separated service IDs allowed to mutate account data
 
 ### Testing
 

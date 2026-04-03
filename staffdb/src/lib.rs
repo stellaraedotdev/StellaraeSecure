@@ -9,8 +9,6 @@ pub mod db;
 pub mod auth;
 pub mod api;
 
-use std::sync::Arc;
-
 pub use config::Config;
 pub use error::{Error, Result};
 pub use db::DbPool;

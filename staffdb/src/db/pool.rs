@@ -1,7 +1,7 @@
 // Database connection pool initialization and management
 
 use crate::error::{Error, Result};
-use sqlx::{sqlite::SqlitePool, sqlite::SqlitePoolOptions, Pool, Sqlite};
+use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use std::time::Duration;
 
 pub type DbPool = Pool<Sqlite>;

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use crate::AppState;
 
 /// Build the API router with all handlers
-pub fn routes(state: Arc<AppState>) -> Router {
+pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Account endpoints
         .route("/accounts", post(handlers::accounts::create_account))
@@ -40,5 +40,4 @@ pub fn routes(state: Arc<AppState>) -> Router {
             state.clone(),
             middleware::service_auth,
         ))
-        .with_state(state)
 }

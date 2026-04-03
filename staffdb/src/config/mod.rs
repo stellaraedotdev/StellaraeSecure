@@ -26,8 +26,11 @@ pub struct Config {
     /// Log level (trace, debug, info, warn, error)
     pub log_level: String,
 
-    /// Allowed inbound service API keys for m2m authentication
-    pub service_api_keys: Vec<String>,
+    /// Allowed inbound service API credentials as `service_id:key` pairs.
+    pub service_api_keys: Vec<(String, String)>,
+
+    /// Service IDs allowed to call mutating endpoints.
+    pub privileged_services: Vec<String>,
 }
 
 impl Config {
@@ -41,13 +44,20 @@ impl Config {
             .and_then(|p| p.parse().ok())
             .unwrap_or(3000);
 
-        let database_url = env::var("DATABASE_URL").or_else(|_| {
-            // Default to SQLite in development
-            match env::var("ENVIRONMENT").as_deref() {
-                Ok("production") => Err(env::VarError::NotPresent),
-                _ => Ok("sqlite:staffdb.sqlite".to_string()),
+        let database_url = match env::var("DATABASE_URL") {
+            Ok(value) => value,
+            Err(_) => {
+                // Default to SQLite in development
+                match env::var("ENVIRONMENT").as_deref() {
+                    Ok("production") => {
+                        return Err(Error::ConfigError(
+                            "DATABASE_URL is required in production".to_string(),
+                        ));
+                    }
+                    _ => "sqlite:staffdb.sqlite".to_string(),
+                }
             }
-        })?;
+        };
 
         let service_id = env::var("SERVICE_ID").unwrap_or_else(|_| "staffdb".to_string());
         let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
@@ -56,7 +66,23 @@ impl Config {
             .unwrap_or_default()
             .split(',')
             .map(str::trim)
-            .filter(|k| !k.is_empty())
+            .filter(|pair| !pair.is_empty())
+            .filter_map(|pair| {
+                let mut parts = pair.splitn(2, ':');
+                let service = parts.next()?.trim();
+                let key = parts.next()?.trim();
+                if service.is_empty() || key.is_empty() {
+                    return None;
+                }
+                Some((service.to_string(), key.to_string()))
+            })
+            .collect::<Vec<_>>();
+
+        let privileged_services = env::var("PRIVILEGED_SERVICES")
+            .unwrap_or_else(|_| "admin,oauth2,staffdb".to_string())
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
             .map(ToString::to_string)
             .collect::<Vec<_>>();
 
@@ -68,6 +94,7 @@ impl Config {
             environment,
             log_level,
             service_api_keys,
+            privileged_services,
         };
 
         config.validate()?;
@@ -86,7 +113,26 @@ impl Config {
 
         if self.is_production() && self.service_api_keys.is_empty() {
             return Err(Error::ConfigError(
-                "SERVICE_API_KEYS is required in production".to_string(),
+                "SERVICE_API_KEYS (service_id:key pairs) is required in production"
+                    .to_string(),
+            ));
+        }
+
+        if self.is_production()
+            && self
+                .service_api_keys
+                .iter()
+                .any(|(_, k)| k.eq_ignore_ascii_case("change_me"))
+        {
+            return Err(Error::ConfigError(
+                "SERVICE_API_KEYS must not contain placeholder values in production"
+                    .to_string(),
+            ));
+        }
+
+        if self.privileged_services.is_empty() {
+            return Err(Error::ConfigError(
+                "PRIVILEGED_SERVICES must contain at least one service".to_string(),
             ));
         }
 
@@ -117,7 +163,8 @@ mod tests {
             service_id: "test".to_string(),
             environment: "test".to_string(),
             log_level: "info".to_string(),
-            service_api_keys: vec!["test-key".to_string()],
+            service_api_keys: vec![("test".to_string(), "test-key".to_string())],
+            privileged_services: vec!["test".to_string()],
         };
 
         assert!(invalid.validate().is_err());

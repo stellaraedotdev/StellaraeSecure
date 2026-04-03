@@ -3,7 +3,7 @@
 use crate::error::{Error, Result};
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, SaltString},
-    Argon2, PasswordVerificationError,
+    Argon2, PasswordVerifier,
 };
 use rand::rngs::OsRng;
 
@@ -36,11 +36,7 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
 
     match argon2.verify_password(password.as_bytes(), &parsed_hash) {
         Ok(()) => Ok(true),
-        Err(PasswordVerificationError::InvalidPassword) => Ok(false),
-        Err(e) => {
-            tracing::error!("Password verification error: {}", e);
-            Err(Error::InternalServerError)
-        }
+        Err(_) => Ok(false),
     }
 }
 

@@ -4,8 +4,11 @@ use crate::error::{Error, Result};
 use sha2::{Digest, Sha256};
 use hex;
 
-/// Validate a service API key against configured allow-list.
-pub fn validate_service_key(provided_key: &str, allowed_keys: &[String]) -> Result<()> {
+/// Validate a service API key and return the canonical service identity.
+pub fn validate_service_key(
+    provided_key: &str,
+    allowed_keys: &[(String, String)],
+) -> Result<String> {
     if provided_key.is_empty() {
         return Err(Error::AuthenticationError(
             "Service key is required".to_string(),
@@ -18,16 +21,18 @@ pub fn validate_service_key(provided_key: &str, allowed_keys: &[String]) -> Resu
         ));
     }
 
-    let is_valid = allowed_keys
-        .iter()
-        .any(|k| constant_time_eq(provided_key.as_bytes(), k.as_bytes()));
-
-    if !is_valid {
-        return Err(Error::AuthenticationError("Invalid service key".to_string()));
+    for (service_id, allowed_key) in allowed_keys {
+        if constant_time_eq(provided_key.as_bytes(), allowed_key.as_bytes()) {
+            tracing::info!(
+                service_id = %service_id,
+                key_hash = %hash_key(provided_key),
+                "Service key validated"
+            );
+            return Ok(service_id.clone());
+        }
     }
 
-    tracing::info!(key_hash = %hash_key(provided_key), "Service key validated");
-    Ok(())
+    Err(Error::AuthenticationError("Invalid service key".to_string()))
 }
 
 /// Hash a key for logging (never log the actual key)
@@ -77,19 +82,29 @@ mod tests {
     #[test]
     fn test_validate_service_key() {
         let key = "test-service-key-12345";
-        let result = validate_service_key(key, &[key.to_string()]);
+        let result = validate_service_key(
+            key,
+            &[("oauth2".to_string(), key.to_string())],
+        );
         assert!(result.is_ok());
+        assert_eq!(result.expect("validated service id"), "oauth2");
     }
 
     #[test]
     fn test_validate_empty_key_fails() {
-        let result = validate_service_key("", &["x".to_string()]);
+        let result = validate_service_key(
+            "",
+            &[("x".to_string(), "x".to_string())],
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_service_key_fails() {
-        let result = validate_service_key("bad", &["good".to_string()]);
+        let result = validate_service_key(
+            "bad",
+            &[("svc".to_string(), "good".to_string())],
+        );
         assert!(result.is_err());
     }
 

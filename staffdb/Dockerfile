@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for StellaraeSecure staffdb
 
 # --- Builder stage ---
-FROM rust:1.70 as builder
+FROM rust:1.85 as builder
 
 WORKDIR /build
 
@@ -22,6 +22,7 @@ WORKDIR /app
 # Install runtime dependencies (minimal)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 

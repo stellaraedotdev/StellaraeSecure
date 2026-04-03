@@ -5,7 +5,7 @@ pub mod migrations;
 pub mod pool;
 pub mod repository;
 
-pub use pool::DbPool;
+pub use pool::{create_pool, health_check, DbPool};
 pub use repository::{
 	AccountRepository,
 	AuditLogRepository,
