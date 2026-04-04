@@ -116,6 +116,7 @@ Required environment variables:
 
 - `OAUTH2_STAFF_IDENTITY_HMAC_SECRET` shared secret used for identity signature verification
 - optional `OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS` (default `120`)
+- optional `OAUTH2_PANEL_SESSION_TTL_SECONDS` (default `900`)
 
 Admin endpoints remain guarded by `x-admin-key`.
 
@@ -129,16 +130,68 @@ Current operation keys:
 - `oauth.token.revoke` for token revocation
 - `oauth.token.introspect` for token introspection
 - `oauth.staff.authorize` for staff-audience authorization flow
+- `panel.audit.read` for admin audit event access
+- `panel.session.issue` for issuing panel sessions
+- `panel.session.verify` for validating panel sessions
 
 Client ownership model:
 
 - Client registration assigns ownership to `x-staff-account-id`.
 - Client details and collaborator operations require owner or collaborator membership.
 
+Admin API namespace:
+
+- `/api/admin/clients`
+- `/api/admin/clients/:client_id`
+- `/api/admin/clients/:client_id/collaborators`
+- `/api/admin/clients/:client_id/collaborators/:account_id`
+- `/api/admin/tokens/revoke`
+- `/api/admin/tokens/introspect`
+- `/api/admin/audit/events`
+
+Panel session endpoints:
+
+- `/api/panel/session`
+- `/api/panel/session/:session_id`
+
 Authorize/consent hardening:
 
 - `/api/authorize` resolves the account from signed headers (not from user-provided email/username query values).
 - `/api/consent` requires authenticated signed identity and only allows the same account that initiated the pending consent request.
+
+## Step-Up Authentication for High-Risk Operations
+
+Certain operations require fresh session validation to prevent unauthorized privilege abuse:
+
+**High-risk operations** (require step-up freshness):
+- `oauth.token.revoke` for token revocation
+- `oauth.client.secret.rotate` for client secret rotation
+- `oauth.client.delete` for client deletion
+- `oauth.client.collaborator.manage` for collaborator add/remove
+
+**Step-up session validation:**
+- High-risk operations must include `x-panel-session-id` header pointing to an active panel session.
+- The session must be owned by the requesting actor (`x-staff-account-id`).
+- The session must have been issued within the freshness window (see below).
+- Expired sessions are rejected (checked against `expires_at`).
+
+**Configuration:**
+- `OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS` (default `300` = 5 minutes) defines how long a panel session remains "fresh" for high-risk operations. After this window, the actor must request a new panel session via POST `/api/panel/session`.
+
+**Example high-risk operation with step-up:**
+```
+POST /api/admin/tokens/revoke
+x-admin-key: <admin-key>
+x-staff-account-id: <account-id>
+x-staff-identity-ts: <timestamp>
+x-staff-identity-sig: <hmac-signature>
+x-panel-session-id: <session-id>
+x-correlation-id: <trace-id>
+
+{"token": "..."}
+```
+
+If the panel session is missing, not found, expired, stale, or does not match the actor account, the request returns 403 Authorization.
 
 ## Open Questions
 

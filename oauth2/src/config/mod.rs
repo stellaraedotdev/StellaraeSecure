@@ -35,9 +35,11 @@ pub struct Config {
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
     pub auth_code_ttl_seconds: i64,
+    pub panel_session_ttl_seconds: i64,
     pub permission_enforcement_mode: PermissionEnforcementMode,
     pub staff_identity_hmac_secret: String,
     pub staff_identity_max_skew_seconds: i64,
+    pub stepup_session_freshness_seconds: i64,
 }
 
 #[derive(Debug, Error)]
@@ -109,6 +111,14 @@ impl Config {
                 value: env::var("OAUTH2_AUTH_CODE_TTL_SECONDS").unwrap_or_default(),
             })?;
 
+        let panel_session_ttl_seconds = env::var("OAUTH2_PANEL_SESSION_TTL_SECONDS")
+            .unwrap_or_else(|_| "900".to_string())
+            .parse::<i64>()
+            .map_err(|_| ConfigError::InvalidVar {
+                name: "OAUTH2_PANEL_SESSION_TTL_SECONDS",
+                value: env::var("OAUTH2_PANEL_SESSION_TTL_SECONDS").unwrap_or_default(),
+            })?;
+
         let staff_identity_hmac_secret = env::var("OAUTH2_STAFF_IDENTITY_HMAC_SECRET")
             .map_err(|_| ConfigError::MissingVar("OAUTH2_STAFF_IDENTITY_HMAC_SECRET"))?;
 
@@ -149,6 +159,21 @@ impl Config {
             }
         };
 
+        let stepup_session_freshness_seconds = env::var("OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS")
+            .unwrap_or_else(|_| "300".to_string())
+            .parse::<i64>()
+            .map_err(|_| ConfigError::InvalidVar {
+                name: "OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS",
+                value: env::var("OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS").unwrap_or_default(),
+            })?;
+
+        if stepup_session_freshness_seconds <= 0 {
+            return Err(ConfigError::InvalidVar {
+                name: "OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS",
+                value: stepup_session_freshness_seconds.to_string(),
+            });
+        }
+
         Ok(Self {
             host,
             port,
@@ -163,9 +188,11 @@ impl Config {
             access_token_ttl_seconds,
             refresh_token_ttl_seconds,
             auth_code_ttl_seconds,
+            panel_session_ttl_seconds,
             permission_enforcement_mode,
             staff_identity_hmac_secret,
             staff_identity_max_skew_seconds,
+            stepup_session_freshness_seconds,
         })
     }
 }

@@ -59,3 +59,24 @@ pub struct RefreshToken {
     pub expires_at: DateTime<Utc>,
     pub revoked: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminAuditEvent {
+    pub id: String,
+    pub actor_account_id: String,
+    pub operation: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub decision: String,
+    pub correlation_id: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PanelSession {
+    pub id: String,
+    pub account_id: String,
+    pub permissions: Vec<String>,
+    pub issued_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}

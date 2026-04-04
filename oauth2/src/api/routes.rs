@@ -13,7 +13,15 @@ use uuid::Uuid;
 use crate::{
     config::PermissionEnforcementMode,
     error::AppError,
-    models::{AccessToken, AuthorizationCode, OAuthClient, PendingConsent, RefreshToken},
+    models::{
+        AccessToken,
+        AdminAuditEvent,
+        AuthorizationCode,
+        OAuthClient,
+        PanelSession,
+        PendingConsent,
+        RefreshToken,
+    },
     staffdb,
     state::{generate_secret, now_plus_seconds, sha256_hex, AppState},
 };
@@ -21,9 +29,22 @@ use crate::{
 const PERM_OAUTH_CLIENT_CREATE: &str = "oauth.client.create";
 const PERM_OAUTH_CLIENT_READ: &str = "oauth.client.read";
 const PERM_OAUTH_CLIENT_COLLABORATOR_MANAGE: &str = "oauth.client.collaborator.manage";
+const PERM_OAUTH_CLIENT_SECRET_ROTATE: &str = "oauth.client.secret.rotate";
+const PERM_OAUTH_CLIENT_DELETE: &str = "oauth.client.delete";
 const PERM_OAUTH_TOKEN_REVOKE: &str = "oauth.token.revoke";
 const PERM_OAUTH_TOKEN_INTROSPECT: &str = "oauth.token.introspect";
 const PERM_OAUTH_STAFF_AUTHORIZE: &str = "oauth.staff.authorize";
+const PERM_PANEL_AUDIT_READ: &str = "panel.audit.read";
+const PERM_PANEL_SESSION_ISSUE: &str = "panel.session.issue";
+const PERM_PANEL_SESSION_VERIFY: &str = "panel.session.verify";
+
+// High-risk operations requiring step-up session freshness
+const HIGH_RISK_PERMISSIONS: &[&str] = &[
+    PERM_OAUTH_CLIENT_SECRET_ROTATE,
+    PERM_OAUTH_CLIENT_DELETE,
+    PERM_OAUTH_TOKEN_REVOKE,
+    PERM_OAUTH_CLIENT_COLLABORATOR_MANAGE,
+];
 
 const DECISION_ALLOW: &str = "allow";
 const DECISION_DENY: &str = "deny";
@@ -163,6 +184,34 @@ struct IntrospectResponse {
     token_type: Option<&'static str>,
 }
 
+#[derive(Debug, Serialize)]
+struct AdminAuditEventsResponse {
+    events: Vec<AdminAuditEvent>,
+}
+
+#[derive(Debug, Clone)]
+struct AdminRequestContext {
+    actor_account_id: String,
+    correlation_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PanelSessionResponse {
+    session_id: String,
+    account_id: String,
+    permissions: Vec<String>,
+    expires_at: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PanelSessionValidationResponse {
+    active: bool,
+    session_id: String,
+    account_id: Option<String>,
+    permissions: Option<Vec<String>>,
+    expires_at: Option<String>,
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
@@ -182,6 +231,21 @@ pub fn router(state: AppState) -> Router {
         .route("/api/token", post(token))
         .route("/api/revoke", post(revoke))
         .route("/api/introspect", post(introspect))
+        .route("/api/admin/clients", post(register_client))
+        .route("/api/admin/clients/:client_id", get(get_client))
+        .route(
+            "/api/admin/clients/:client_id/collaborators",
+            post(add_collaborator).get(list_collaborators),
+        )
+        .route(
+            "/api/admin/clients/:client_id/collaborators/:account_id",
+            delete(remove_collaborator),
+        )
+        .route("/api/admin/tokens/revoke", post(revoke))
+        .route("/api/admin/tokens/introspect", post(introspect))
+        .route("/api/admin/audit/events", get(list_admin_audit_events))
+        .route("/api/panel/session", post(issue_panel_session))
+        .route("/api/panel/session/:session_id", get(validate_panel_session))
         .with_state(state)
 }
 
@@ -213,8 +277,7 @@ async fn register_client(
     headers: HeaderMap,
     Json(payload): Json<RegisterClientRequest>,
 ) -> Result<(StatusCode, Json<RegisterClientResponse>), AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(
+    let admin = require_admin_permission(
         &state,
         &headers,
         PERM_OAUTH_CLIENT_CREATE,
@@ -222,7 +285,7 @@ async fn register_client(
     )
     .await?;
 
-    let owner_account_id = verified_staff_actor_id(&state, &headers)?;
+    let owner_account_id = admin.actor_account_id.clone();
 
     if payload.name.trim().is_empty() {
         return Err(AppError::Validation("name is required".to_string()));
@@ -270,6 +333,15 @@ async fn register_client(
         .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
     store.clients.insert(client_id.clone(), client);
 
+    append_admin_audit_event(
+        &mut store,
+        &admin,
+        "register_client",
+        "oauth_client",
+        &client_id,
+        DECISION_ALLOW,
+    );
+
     Ok((
         StatusCode::CREATED,
         Json(RegisterClientResponse {
@@ -289,9 +361,9 @@ async fn get_client(
     headers: HeaderMap,
     Path(client_id): Path<String>,
 ) -> Result<Json<ClientResponse>, AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(&state, &headers, PERM_OAUTH_CLIENT_READ, "get_client").await?;
-    let caller_account_id = verified_staff_actor_id(&state, &headers)?;
+    let admin = require_admin_permission(&state, &headers, PERM_OAUTH_CLIENT_READ, "get_client")
+        .await?;
+    let caller_account_id = admin.actor_account_id.clone();
     let store = state
         .store
         .lock()
@@ -318,8 +390,7 @@ async fn add_collaborator(
     Path(client_id): Path<String>,
     Json(payload): Json<CollaboratorRequest>,
 ) -> Result<Json<CollaboratorsResponse>, AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(
+    let admin = require_admin_permission_with_stepup(
         &state,
         &headers,
         PERM_OAUTH_CLIENT_COLLABORATOR_MANAGE,
@@ -327,7 +398,7 @@ async fn add_collaborator(
     )
     .await?;
 
-    let caller_account_id = verified_staff_actor_id(&state, &headers)?;
+    let caller_account_id = admin.actor_account_id.clone();
 
     if payload.account_id.trim().is_empty() {
         return Err(AppError::Validation("account_id is required".to_string()));
@@ -338,30 +409,36 @@ async fn add_collaborator(
         .lock()
         .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
 
-    let client = store.clients.get_mut(&client_id).ok_or(AppError::NotFound)?;
-    ensure_client_access(&caller_account_id, client)?;
+    let response = {
+        let client = store.clients.get_mut(&client_id).ok_or(AppError::NotFound)?;
+        ensure_client_access(&caller_account_id, client)?;
 
-    if payload.account_id == client.owner_account_id {
-        return Ok(Json(CollaboratorsResponse {
+        if payload.account_id != client.owner_account_id
+            && !client
+                .collaborator_account_ids
+                .iter()
+                .any(|id| id == &payload.account_id)
+        {
+            client.collaborator_account_ids.push(payload.account_id.clone());
+        }
+
+        CollaboratorsResponse {
             client_id: client.client_id.clone(),
             owner_account_id: client.owner_account_id.clone(),
             collaborator_account_ids: client.collaborator_account_ids.clone(),
-        }));
-    }
+        }
+    };
 
-    if !client
-        .collaborator_account_ids
-        .iter()
-        .any(|id| id == &payload.account_id)
-    {
-        client.collaborator_account_ids.push(payload.account_id.clone());
-    }
+    append_admin_audit_event(
+        &mut store,
+        &admin,
+        "add_collaborator",
+        "oauth_client",
+        &client_id,
+        DECISION_ALLOW,
+    );
 
-    Ok(Json(CollaboratorsResponse {
-        client_id: client.client_id.clone(),
-        owner_account_id: client.owner_account_id.clone(),
-        collaborator_account_ids: client.collaborator_account_ids.clone(),
-    }))
+    Ok(Json(response))
 }
 
 async fn list_collaborators(
@@ -369,11 +446,15 @@ async fn list_collaborators(
     headers: HeaderMap,
     Path(client_id): Path<String>,
 ) -> Result<Json<CollaboratorsResponse>, AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(&state, &headers, PERM_OAUTH_CLIENT_READ, "list_collaborators")
-        .await?;
+    let admin = require_admin_permission(
+        &state,
+        &headers,
+        PERM_OAUTH_CLIENT_READ,
+        "list_collaborators",
+    )
+    .await?;
 
-    let caller_account_id = verified_staff_actor_id(&state, &headers)?;
+    let caller_account_id = admin.actor_account_id.clone();
     let store = state
         .store
         .lock()
@@ -394,8 +475,7 @@ async fn remove_collaborator(
     headers: HeaderMap,
     Path((client_id, account_id)): Path<(String, String)>,
 ) -> Result<StatusCode, AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(
+    let admin = require_admin_permission_with_stepup(
         &state,
         &headers,
         PERM_OAUTH_CLIENT_COLLABORATOR_MANAGE,
@@ -403,7 +483,7 @@ async fn remove_collaborator(
     )
     .await?;
 
-    let caller_account_id = verified_staff_actor_id(&state, &headers)?;
+    let caller_account_id = admin.actor_account_id.clone();
     let mut store = state
         .store
         .lock()
@@ -413,6 +493,15 @@ async fn remove_collaborator(
     ensure_client_access(&caller_account_id, client)?;
 
     client.collaborator_account_ids.retain(|id| id != &account_id);
+    append_admin_audit_event(
+        &mut store,
+        &admin,
+        "remove_collaborator",
+        "oauth_client",
+        &client_id,
+        DECISION_ALLOW,
+    );
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -691,8 +780,13 @@ async fn revoke(
     headers: HeaderMap,
     Json(payload): Json<RevokeRequest>,
 ) -> Result<StatusCode, AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(&state, &headers, PERM_OAUTH_TOKEN_REVOKE, "revoke").await?;
+    let admin = require_admin_permission_with_stepup(
+        &state,
+        &headers,
+        PERM_OAUTH_TOKEN_REVOKE,
+        "revoke",
+    )
+    .await?;
 
     let mut store = state
         .store
@@ -706,6 +800,15 @@ async fn revoke(
         token.revoked = true;
     }
 
+    append_admin_audit_event(
+        &mut store,
+        &admin,
+        "revoke_token",
+        "token",
+        &payload.token,
+        DECISION_ALLOW,
+    );
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -714,8 +817,7 @@ async fn introspect(
     headers: HeaderMap,
     Json(payload): Json<IntrospectRequest>,
 ) -> Result<Json<IntrospectResponse>, AppError> {
-    assert_admin_key(&state, &headers)?;
-    enforce_header_actor_permission(
+    let _admin = require_admin_permission(
         &state,
         &headers,
         PERM_OAUTH_TOKEN_INTROSPECT,
@@ -773,6 +875,120 @@ async fn introspect(
     }))
 }
 
+async fn list_admin_audit_events(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<AdminAuditEventsResponse>, AppError> {
+    let _admin =
+        require_admin_permission(&state, &headers, PERM_PANEL_AUDIT_READ, "list_audit_events")
+            .await?;
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    Ok(Json(AdminAuditEventsResponse {
+        events: store.admin_audit_events.clone(),
+    }))
+}
+
+async fn issue_panel_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<PanelSessionResponse>), AppError> {
+    let admin =
+        require_admin_permission(&state, &headers, PERM_PANEL_SESSION_ISSUE, "issue_panel_session")
+            .await?;
+
+    let account = staffdb::get_account_by_id(&state, &admin.actor_account_id).await?;
+    if !account.is_active || account.account_type != "staff" {
+        return Err(AppError::Authorization);
+    }
+
+    let permission_result = staffdb::get_effective_permissions(&state, &account.id).await?;
+    let now = Utc::now();
+    let session = PanelSession {
+        id: Uuid::new_v4().to_string(),
+        account_id: account.id.clone(),
+        permissions: permission_result.permissions,
+        issued_at: now,
+        expires_at: now_plus_seconds(state.config.panel_session_ttl_seconds),
+    };
+
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+    store
+        .panel_sessions
+        .insert(session.id.clone(), session.clone());
+    append_admin_audit_event(
+        &mut store,
+        &admin,
+        "issue_panel_session",
+        "panel_session",
+        &session.id,
+        DECISION_ALLOW,
+    );
+
+    Ok((
+        StatusCode::CREATED,
+        Json(PanelSessionResponse {
+            session_id: session.id,
+            account_id: session.account_id,
+            permissions: session.permissions,
+            expires_at: session.expires_at.to_rfc3339(),
+        }),
+    ))
+}
+
+async fn validate_panel_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Result<Json<PanelSessionValidationResponse>, AppError> {
+    let _admin =
+        require_admin_permission(&state, &headers, PERM_PANEL_SESSION_VERIFY, "validate_panel_session")
+            .await?;
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    let Some(session) = store.panel_sessions.get(&session_id) else {
+        return Ok(Json(PanelSessionValidationResponse {
+            active: false,
+            session_id,
+            account_id: None,
+            permissions: None,
+            expires_at: None,
+        }));
+    };
+
+    let active = Utc::now() <= session.expires_at;
+    Ok(Json(PanelSessionValidationResponse {
+        active,
+        session_id,
+        account_id: if active {
+            Some(session.account_id.clone())
+        } else {
+            None
+        },
+        permissions: if active {
+            Some(session.permissions.clone())
+        } else {
+            None
+        },
+        expires_at: if active {
+            Some(session.expires_at.to_rfc3339())
+        } else {
+            None
+        },
+    }))
+}
+
 fn assert_admin_key(state: &AppState, headers: &HeaderMap) -> Result<(), AppError> {
     let key = headers
         .get("x-admin-key")
@@ -784,6 +1000,97 @@ fn assert_admin_key(state: &AppState, headers: &HeaderMap) -> Result<(), AppErro
     }
 
     Ok(())
+}
+
+async fn require_admin_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission_key: &str,
+    operation: &str,
+) -> Result<AdminRequestContext, AppError> {
+    assert_admin_key(state, headers)?;
+    enforce_header_actor_permission(state, headers, permission_key, operation).await?;
+
+    Ok(AdminRequestContext {
+        actor_account_id: verified_staff_actor_id(state, headers)?,
+        correlation_id: correlation_id_from_headers(headers),
+    })
+}
+
+async fn require_admin_permission_with_stepup(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission_key: &str,
+    operation: &str,
+) -> Result<AdminRequestContext, AppError> {
+    let admin = require_admin_permission(state, headers, permission_key, operation).await?;
+
+    // Check if this is a high-risk operation requiring fresh step-up session
+    if HIGH_RISK_PERMISSIONS.contains(&permission_key) {
+        validate_stepup_session_freshness(state, headers, &admin.actor_account_id).await?;
+    }
+
+    Ok(admin)
+}
+
+async fn validate_stepup_session_freshness(
+    state: &AppState,
+    headers: &HeaderMap,
+    actor_account_id: &str,
+) -> Result<(), AppError> {
+    let session_id = headers
+        .get("x-panel-session-id")
+        .and_then(|v| v.to_str().ok())
+        .ok_or(AppError::Authorization)?;
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    let session = store
+        .panel_sessions
+        .get(session_id)
+        .ok_or(AppError::Authorization)?;
+
+    // Verify session belongs to the actor
+    if session.account_id != actor_account_id {
+        return Err(AppError::Authorization);
+    }
+
+    // Verify session is still valid
+    let now = Utc::now();
+    if now > session.expires_at {
+        return Err(AppError::Authorization);
+    }
+
+    // Verify session is fresh (issued within the step-up freshness window)
+    let age_seconds = (now - session.issued_at).num_seconds();
+    if age_seconds > state.config.stepup_session_freshness_seconds {
+        return Err(AppError::Authorization);
+    }
+
+    Ok(())
+}
+
+fn append_admin_audit_event(
+    store: &mut crate::state::MemoryStore,
+    admin: &AdminRequestContext,
+    operation: &str,
+    target_type: &str,
+    target_id: &str,
+    decision: &str,
+) {
+    store.admin_audit_events.push(AdminAuditEvent {
+        id: Uuid::new_v4().to_string(),
+        actor_account_id: admin.actor_account_id.clone(),
+        operation: operation.to_string(),
+        target_type: target_type.to_string(),
+        target_id: target_id.to_string(),
+        decision: decision.to_string(),
+        correlation_id: admin.correlation_id.clone(),
+        timestamp: Utc::now(),
+    });
 }
 
 fn verified_staff_actor_id(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
@@ -1098,7 +1405,10 @@ mod tests {
     use crate::config::{Config, PermissionEnforcementMode};
     use crate::state::AppState;
 
-    use super::{correlation_id_from_headers, enforce_permission_claim, has_client_access};
+    use super::{
+        correlation_id_from_headers, enforce_permission_claim, has_client_access,
+        validate_stepup_session_freshness,
+    };
     use crate::models::OAuthClient;
     use chrono::Utc;
 
@@ -1117,9 +1427,11 @@ mod tests {
             access_token_ttl_seconds: 900,
             refresh_token_ttl_seconds: 2592000,
             auth_code_ttl_seconds: 300,
+            panel_session_ttl_seconds: 900,
             permission_enforcement_mode: mode,
             staff_identity_hmac_secret: "test-secret".to_string(),
             staff_identity_max_skew_seconds: 120,
+            stepup_session_freshness_seconds: 300,
         })
     }
 
@@ -1188,5 +1500,114 @@ mod tests {
         assert!(has_client_access("owner-1", &client));
         assert!(has_client_access("collab-1", &client));
         assert!(!has_client_access("other-1", &client));
+    }
+
+    #[tokio::test]
+    async fn stepup_validation_succeeds_for_fresh_session() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let mut store = state.store.lock().unwrap();
+        let now = Utc::now();
+        let session = crate::models::PanelSession {
+            id: "session-1".to_string(),
+            account_id: "actor-1".to_string(),
+            permissions: vec!["oauth.token.revoke".to_string()],
+            issued_at: now,
+            expires_at: now + chrono::Duration::minutes(15),
+        };
+        store.panel_sessions.insert(session.id.clone(), session);
+        drop(store);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
+
+        let result = validate_stepup_session_freshness(&state, &headers, "actor-1").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn stepup_validation_fails_without_session_header() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let headers = HeaderMap::new();
+
+        let result = validate_stepup_session_freshness(&state, &headers, "actor-1").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn stepup_validation_fails_for_nonexistent_session() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-panel-session-id", HeaderValue::from_static("nonexistent"));
+
+        let result = validate_stepup_session_freshness(&state, &headers, "actor-1").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn stepup_validation_fails_for_wrong_actor() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let mut store = state.store.lock().unwrap();
+        let now = Utc::now();
+        let session = crate::models::PanelSession {
+            id: "session-1".to_string(),
+            account_id: "actor-1".to_string(),
+            permissions: vec!["oauth.token.revoke".to_string()],
+            issued_at: now,
+            expires_at: now + chrono::Duration::minutes(15),
+        };
+        store.panel_sessions.insert(session.id.clone(), session);
+        drop(store);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
+
+        let result = validate_stepup_session_freshness(&state, &headers, "actor-2").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn stepup_validation_fails_for_expired_session() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let mut store = state.store.lock().unwrap();
+        let now = Utc::now();
+        let session = crate::models::PanelSession {
+            id: "session-1".to_string(),
+            account_id: "actor-1".to_string(),
+            permissions: vec!["oauth.token.revoke".to_string()],
+            issued_at: now - chrono::Duration::minutes(20),
+            expires_at: now - chrono::Duration::minutes(5),
+        };
+        store.panel_sessions.insert(session.id.clone(), session);
+        drop(store);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
+
+        let result = validate_stepup_session_freshness(&state, &headers, "actor-1").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn stepup_validation_fails_for_stale_session() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let mut store = state.store.lock().unwrap();
+        let now = Utc::now();
+        // Session was issued 400 seconds ago, but freshness window is 300 seconds
+        let session = crate::models::PanelSession {
+            id: "session-1".to_string(),
+            account_id: "actor-1".to_string(),
+            permissions: vec!["oauth.token.revoke".to_string()],
+            issued_at: now - chrono::Duration::seconds(400),
+            expires_at: now + chrono::Duration::minutes(15),
+        };
+        store.panel_sessions.insert(session.id.clone(), session);
+        drop(store);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
+
+        let result = validate_stepup_session_freshness(&state, &headers, "actor-1").await;
+        assert!(result.is_err());
     }
 }

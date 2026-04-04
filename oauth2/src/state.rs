@@ -6,7 +6,15 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sha2::{Digest, Sha256};
 
 use crate::config::Config;
-use crate::models::{AccessToken, AuthorizationCode, OAuthClient, PendingConsent, RefreshToken};
+use crate::models::{
+    AccessToken,
+    AdminAuditEvent,
+    AuthorizationCode,
+    OAuthClient,
+    PanelSession,
+    PendingConsent,
+    RefreshToken,
+};
 
 #[derive(Default)]
 pub struct MemoryStore {
@@ -15,6 +23,8 @@ pub struct MemoryStore {
     pub auth_codes: HashMap<String, AuthorizationCode>,
     pub access_tokens: HashMap<String, AccessToken>,
     pub refresh_tokens: HashMap<String, RefreshToken>,
+    pub panel_sessions: HashMap<String, PanelSession>,
+    pub admin_audit_events: Vec<AdminAuditEvent>,
 }
 
 #[derive(Clone)]
