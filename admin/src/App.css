@@ -1,0 +1,256 @@
+.app-frame {
+  max-width: 1160px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 2.2rem 1.2rem 2.5rem;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 1rem;
+}
+
+.topbar {
+  border: 1px solid var(--edge);
+  border-radius: 1rem;
+  padding: 1.1rem 1.2rem;
+  background: linear-gradient(114deg, rgba(255, 250, 242, 0.95), rgba(243, 235, 220, 0.95));
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.topbar h1 {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-head);
+  font-size: clamp(1.6rem, 2.8vw, 2.4rem);
+  letter-spacing: 0.02em;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted-ink);
+}
+
+.identity-block {
+  text-align: right;
+}
+
+.identity-label {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--muted-ink);
+}
+
+.identity-value {
+  margin: 0.1rem 0 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+}
+
+.primary-nav {
+  display: inline-flex;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.35rem;
+  width: fit-content;
+  background: rgba(16, 32, 49, 0.08);
+}
+
+.primary-nav a {
+  text-decoration: none;
+  color: var(--ink);
+  font-family: var(--font-head);
+  letter-spacing: 0.02em;
+  padding: 0.56rem 1rem;
+  border-radius: 999px;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.primary-nav a.active {
+  background: var(--night);
+  color: #f8efe0;
+}
+
+.workspace-panel {
+  border: 1px solid var(--edge);
+  border-radius: 1rem;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: clamp(1rem, 2vw, 1.6rem);
+}
+
+.workspace-panel h2,
+.workspace-panel h3 {
+  font-family: var(--font-head);
+  margin-top: 0;
+}
+
+.workspace-panel h2 {
+  margin-bottom: 0.35rem;
+}
+
+.lede {
+  margin: 0 0 1rem;
+  color: var(--muted-ink);
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.surface-card {
+  border: 1px solid var(--edge);
+  border-radius: 0.8rem;
+  padding: 0.95rem;
+  background: #fff;
+}
+
+.surface-card h3 {
+  margin: 0.4rem 0 0.5rem;
+  font-size: 1.16rem;
+}
+
+.surface-card p {
+  margin: 0;
+}
+
+.chip {
+  margin: 0;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: #114d66;
+}
+
+.notice {
+  border: 1px dashed var(--edge);
+  border-radius: 0.8rem;
+  background: #fff;
+  padding: 0.9rem 1rem;
+}
+
+.notice.warning {
+  border-color: rgba(183, 80, 31, 0.5);
+  background: rgba(183, 80, 31, 0.06);
+}
+
+.login-card {
+  max-width: 760px;
+  margin: 5vh auto 0;
+  border: 1px solid var(--edge);
+  border-radius: 0.95rem;
+  background: linear-gradient(180deg, rgba(255, 250, 242, 0.94), rgba(249, 243, 232, 0.98));
+  box-shadow: var(--shadow);
+  padding: clamp(1rem, 2.5vw, 1.65rem);
+}
+
+.form-grid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  border: 1px solid #baab91;
+  border-radius: 0.55rem;
+  background: #fff;
+  color: #132a3a;
+  padding: 0.62rem 0.7rem;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.primary-btn,
+.ghost-btn {
+  border-radius: 0.55rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.primary-btn {
+  background: var(--night);
+  color: #fdf5e8;
+  padding: 0.6rem 1rem;
+}
+
+.ghost-btn {
+  padding: 0.45rem 0.8rem;
+  background: var(--signal-soft);
+  color: #0f4f54;
+}
+
+.inline-btn {
+  display: inline-block;
+  margin-top: 0.6rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0.7rem 0;
+}
+
+.error-text {
+  margin: 0;
+  color: #8a2f11;
+  font-weight: 600;
+}
+
+.audit-list h4 {
+  margin: 0.9rem 0 0.4rem;
+}
+
+.audit-list ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .identity-block {
+    text-align: left;
+    width: 100%;
+  }
+
+  .primary-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
