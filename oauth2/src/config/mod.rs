@@ -3,6 +3,23 @@ use std::net::IpAddr;
 
 use thiserror::Error;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionEnforcementMode {
+    Off,
+    Observe,
+    Enforce,
+}
+
+impl PermissionEnforcementMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PermissionEnforcementMode::Off => "off",
+            PermissionEnforcementMode::Observe => "observe",
+            PermissionEnforcementMode::Enforce => "enforce",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub host: IpAddr,
@@ -18,6 +35,9 @@ pub struct Config {
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
     pub auth_code_ttl_seconds: i64,
+    pub permission_enforcement_mode: PermissionEnforcementMode,
+    pub staff_identity_hmac_secret: String,
+    pub staff_identity_max_skew_seconds: i64,
 }
 
 #[derive(Debug, Error)]
@@ -89,6 +109,46 @@ impl Config {
                 value: env::var("OAUTH2_AUTH_CODE_TTL_SECONDS").unwrap_or_default(),
             })?;
 
+        let staff_identity_hmac_secret = env::var("OAUTH2_STAFF_IDENTITY_HMAC_SECRET")
+            .map_err(|_| ConfigError::MissingVar("OAUTH2_STAFF_IDENTITY_HMAC_SECRET"))?;
+
+        let staff_identity_max_skew_seconds = env::var("OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS")
+            .unwrap_or_else(|_| "120".to_string())
+            .parse::<i64>()
+            .map_err(|_| ConfigError::InvalidVar {
+                name: "OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS",
+                value: env::var("OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS").unwrap_or_default(),
+            })?;
+
+        if staff_identity_max_skew_seconds <= 0 {
+            return Err(ConfigError::InvalidVar {
+                name: "OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS",
+                value: staff_identity_max_skew_seconds.to_string(),
+            });
+        }
+
+        let default_mode = if environment.eq_ignore_ascii_case("development") {
+            "observe"
+        } else {
+            "enforce"
+        };
+
+        let permission_enforcement_mode = match env::var("OAUTH2_PERMISSION_ENFORCEMENT_MODE")
+            .unwrap_or_else(|_| default_mode.to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "off" => PermissionEnforcementMode::Off,
+            "observe" => PermissionEnforcementMode::Observe,
+            "enforce" => PermissionEnforcementMode::Enforce,
+            _ => {
+                return Err(ConfigError::InvalidVar {
+                    name: "OAUTH2_PERMISSION_ENFORCEMENT_MODE",
+                    value: env::var("OAUTH2_PERMISSION_ENFORCEMENT_MODE").unwrap_or_default(),
+                })
+            }
+        };
+
         Ok(Self {
             host,
             port,
@@ -103,6 +163,9 @@ impl Config {
             access_token_ttl_seconds,
             refresh_token_ttl_seconds,
             auth_code_ttl_seconds,
+            permission_enforcement_mode,
+            staff_identity_hmac_secret,
+            staff_identity_max_skew_seconds,
         })
     }
 }

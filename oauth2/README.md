@@ -93,6 +93,53 @@ The oauth2 submodule is ready for integration when:
 - It has tests covering the core OAuth flows.
 - It does not include client-side code.
 
+## Permission Enforcement Rollout
+
+The oauth2 service now supports staged permission enforcement for staff-authorized operations.
+
+- `OAUTH2_PERMISSION_ENFORCEMENT_MODE=off` disables permission checks.
+- `OAUTH2_PERMISSION_ENFORCEMENT_MODE=observe` evaluates policy and logs would-deny decisions without blocking requests.
+- `OAUTH2_PERMISSION_ENFORCEMENT_MODE=enforce` blocks requests that do not satisfy required permission keys.
+
+Default behavior:
+
+- `development` defaults to `observe`.
+- non-development environments default to `enforce`.
+
+For staff-bound endpoints, requests must include signed identity headers:
+
+- `x-staff-account-id`
+- `x-staff-identity-ts` (unix epoch seconds)
+- `x-staff-identity-sig` (hex HMAC-SHA256 of `x-staff-account-id:x-staff-identity-ts`)
+
+Required environment variables:
+
+- `OAUTH2_STAFF_IDENTITY_HMAC_SECRET` shared secret used for identity signature verification
+- optional `OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS` (default `120`)
+
+Admin endpoints remain guarded by `x-admin-key`.
+
+Include `x-correlation-id` on requests to make permission decision logs traceable across services. If omitted, oauth2 generates one automatically per decision path.
+
+Current operation keys:
+
+- `oauth.client.create` for client registration
+- `oauth.client.read` for client fetch
+- `oauth.client.collaborator.manage` for collaborator add/remove
+- `oauth.token.revoke` for token revocation
+- `oauth.token.introspect` for token introspection
+- `oauth.staff.authorize` for staff-audience authorization flow
+
+Client ownership model:
+
+- Client registration assigns ownership to `x-staff-account-id`.
+- Client details and collaborator operations require owner or collaborator membership.
+
+Authorize/consent hardening:
+
+- `/api/authorize` resolves the account from signed headers (not from user-provided email/username query values).
+- `/api/consent` requires authenticated signed identity and only allows the same account that initiated the pending consent request.
+
 ## Open Questions
 
 These will be resolved during implementation:

@@ -9,6 +9,8 @@ pub struct OAuthClient {
     pub redirect_uris: Vec<String>,
     pub allowed_scopes: Vec<String>,
     pub audience: String,
+    pub owner_account_id: String,
+    pub collaborator_account_ids: Vec<String>,
     pub created_at: DateTime<Utc>,
 }
 
