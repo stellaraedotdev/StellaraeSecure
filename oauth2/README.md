@@ -143,7 +143,14 @@ Persistence model:
 
 - OAuth client records, pending consent records, authorization codes, access tokens, and refresh tokens are persisted to the SQLite database configured by `DATABASE_URL`.
 - Admin audit events and panel sessions are also persisted to the same SQLite database.
+- SQLite is the source of truth for persisted OAuth data paths; in-memory maps are no longer used as read fallbacks for these records.
 - `sqlite::memory:` is accepted for tests; file-backed SQLite URLs are also supported.
+
+Migration model:
+
+- Schema changes are versioned and tracked in `schema_migrations`.
+- Current migration files live under `oauth2/migrations/`.
+- Startup applies unapplied migrations in order before serving requests.
 
 Admin API namespace:
 

@@ -327,16 +327,10 @@ async fn register_client(
         created_at: Utc::now(),
     };
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-    store.clients.insert(client_id.clone(), client);
-    persist_client(&state, store.clients.get(&client_id).expect("client just inserted"))?;
+    persist_client(&state, &client)?;
 
     append_admin_audit_event(
         &state,
-        &mut store,
         &admin,
         "register_client",
         "oauth_client",
@@ -401,38 +395,28 @@ async fn add_collaborator(
         return Err(AppError::Validation("account_id is required".to_string()));
     }
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+    let mut client = load_client(&state, &client_id)?;
+    ensure_client_access(&caller_account_id, &client)?;
 
-    let response = {
-        let client = store.clients.get_mut(&client_id).ok_or(AppError::NotFound)?;
-        ensure_client_access(&caller_account_id, client)?;
+    if payload.account_id != client.owner_account_id
+        && !client
+            .collaborator_account_ids
+            .iter()
+            .any(|id| id == &payload.account_id)
+    {
+        client.collaborator_account_ids.push(payload.account_id.clone());
+    }
 
-        if payload.account_id != client.owner_account_id
-            && !client
-                .collaborator_account_ids
-                .iter()
-                .any(|id| id == &payload.account_id)
-        {
-            client.collaborator_account_ids.push(payload.account_id.clone());
-        }
-
-        CollaboratorsResponse {
-            client_id: client.client_id.clone(),
-            owner_account_id: client.owner_account_id.clone(),
-            collaborator_account_ids: client.collaborator_account_ids.clone(),
-        }
+    let response = CollaboratorsResponse {
+        client_id: client.client_id.clone(),
+        owner_account_id: client.owner_account_id.clone(),
+        collaborator_account_ids: client.collaborator_account_ids.clone(),
     };
 
-    if let Some(client) = store.clients.get(&client_id) {
-        persist_client(&state, client)?;
-    }
+    persist_client(&state, &client)?;
 
     append_admin_audit_event(
         &state,
-        &mut store,
         &admin,
         "add_collaborator",
         "oauth_client",
@@ -481,19 +465,13 @@ async fn remove_collaborator(
     .await?;
 
     let caller_account_id = admin.actor_account_id.clone();
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    let client = store.clients.get_mut(&client_id).ok_or(AppError::NotFound)?;
-    ensure_client_access(&caller_account_id, client)?;
+    let mut client = load_client(&state, &client_id)?;
+    ensure_client_access(&caller_account_id, &client)?;
 
     client.collaborator_account_ids.retain(|id| id != &account_id);
-    persist_client(&state, client)?;
+    persist_client(&state, &client)?;
     append_admin_audit_event(
         &state,
-        &mut store,
         &admin,
         "remove_collaborator",
         "oauth_client",
@@ -575,17 +553,7 @@ async fn authorize(
         expires_at: pending.expires_at.to_rfc3339(),
     };
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-    store
-        .pending_consents
-        .insert(pending.request_id.clone(), pending);
-
-    if let Some(consent) = store.pending_consents.get(&response.request_id) {
-        persist_pending_consent(&state, consent)?;
-    }
+    persist_pending_consent(&state, &pending)?;
 
     Ok(Json(response))
 }
@@ -759,21 +727,8 @@ async fn revoke(
         persist_refresh_token(&state, &token)?;
     }
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    if let Some(token) = store.access_tokens.get_mut(&payload.token) {
-        token.revoked = true;
-    }
-    if let Some(token) = store.refresh_tokens.get_mut(&payload.token) {
-        token.revoked = true;
-    }
-
     append_admin_audit_event(
         &state,
-        &mut store,
         &admin,
         "revoke_token",
         "token",
@@ -850,18 +805,7 @@ async fn list_admin_audit_events(
         require_admin_permission(&state, &headers, PERM_PANEL_AUDIT_READ, "list_audit_events")
             .await?;
 
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    let mut events = state.load_admin_audit_events()?;
-    for event in store.admin_audit_events.iter() {
-        if !events.iter().any(|existing| existing.id == event.id) {
-            events.push(event.clone());
-        }
-    }
-    events.sort_by_key(|event| event.timestamp);
+    let events = state.load_admin_audit_events()?;
 
     Ok(Json(AdminAuditEventsResponse {
         events,
@@ -891,17 +835,9 @@ async fn issue_panel_session(
         expires_at: now_plus_seconds(state.config.panel_session_ttl_seconds),
     };
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-    store
-        .panel_sessions
-        .insert(session.id.clone(), session.clone());
     state.persist_panel_session(&session)?;
     append_admin_audit_event(
         &state,
-        &mut store,
         &admin,
         "issue_panel_session",
         "panel_session",
@@ -1041,7 +977,6 @@ async fn validate_stepup_session_freshness(
 
 fn append_admin_audit_event(
     state: &AppState,
-    store: &mut crate::state::MemoryStore,
     admin: &AdminRequestContext,
     operation: &str,
     target_type: &str,
@@ -1058,8 +993,6 @@ fn append_admin_audit_event(
         correlation_id: admin.correlation_id.clone(),
         timestamp: Utc::now(),
     };
-
-    store.admin_audit_events.push(event.clone());
     let _ = state.persist_admin_audit_event(&event);
 }
 
@@ -1067,29 +1000,13 @@ fn load_panel_session(
     state: &AppState,
     session_id: &str,
 ) -> Result<Option<PanelSession>, AppError> {
-    if let Some(session) = state.load_panel_session(session_id)? {
-        return Ok(Some(session));
-    }
-
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    Ok(store.panel_sessions.get(session_id).cloned())
+    state.load_panel_session(session_id)
 }
 
 fn load_client(state: &AppState, client_id: &str) -> Result<OAuthClient, AppError> {
-    if let Some(client) = state.load_oauth_client(client_id)? {
-        return Ok(client);
-    }
-
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    store.clients.get(client_id).cloned().ok_or(AppError::NotFound)
+    state
+        .load_oauth_client(client_id)?
+        .ok_or(AppError::NotFound)
 }
 
 fn persist_client(state: &AppState, client: &OAuthClient) -> Result<(), AppError> {
@@ -1101,19 +1018,7 @@ fn persist_pending_consent(state: &AppState, consent: &PendingConsent) -> Result
 }
 
 fn take_pending_consent(state: &AppState, request_id: &str) -> Result<PendingConsent, AppError> {
-    if let Some(consent) = state.take_pending_consent(request_id)? {
-        return Ok(consent);
-    }
-
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    store
-        .pending_consents
-        .remove(request_id)
-        .ok_or(AppError::NotFound)
+    state.take_pending_consent(request_id)?.ok_or(AppError::NotFound)
 }
 
 fn persist_auth_code(state: &AppState, auth_code: &AuthorizationCode) -> Result<(), AppError> {
@@ -1121,16 +1026,7 @@ fn persist_auth_code(state: &AppState, auth_code: &AuthorizationCode) -> Result<
 }
 
 fn take_auth_code(state: &AppState, code: &str) -> Result<Option<AuthorizationCode>, AppError> {
-    if let Some(auth_code) = state.take_auth_code(code)? {
-        return Ok(Some(auth_code));
-    }
-
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    Ok(store.auth_codes.remove(code))
+    state.take_auth_code(code)
 }
 
 fn persist_access_token(state: &AppState, token: &AccessToken) -> Result<(), AppError> {
@@ -1138,16 +1034,7 @@ fn persist_access_token(state: &AppState, token: &AccessToken) -> Result<(), App
 }
 
 fn load_access_token(state: &AppState, token: &str) -> Result<Option<AccessToken>, AppError> {
-    if let Some(token_data) = state.load_access_token(token)? {
-        return Ok(Some(token_data));
-    }
-
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    Ok(store.access_tokens.get(token).cloned())
+    state.load_access_token(token)
 }
 
 fn persist_refresh_token(state: &AppState, token: &RefreshToken) -> Result<(), AppError> {
@@ -1155,29 +1042,11 @@ fn persist_refresh_token(state: &AppState, token: &RefreshToken) -> Result<(), A
 }
 
 fn take_refresh_token(state: &AppState, token: &str) -> Result<Option<RefreshToken>, AppError> {
-    if let Some(token_data) = state.load_refresh_token(token)? {
-        return Ok(Some(token_data));
-    }
-
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    Ok(store.refresh_tokens.remove(token))
+    state.load_refresh_token(token)
 }
 
 fn load_refresh_token(state: &AppState, token: &str) -> Result<Option<RefreshToken>, AppError> {
-    if let Some(token_data) = state.load_refresh_token(token)? {
-        return Ok(Some(token_data));
-    }
-
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    Ok(store.refresh_tokens.get(token).cloned())
+    state.load_refresh_token(token)
 }
 
 fn verified_staff_actor_id(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
@@ -1431,14 +1300,7 @@ fn issue_access_token(
         revoked: false,
     };
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-    store.access_tokens.insert(token.clone(), token_data);
-    if let Some(token_data) = store.access_tokens.get(&token) {
-        persist_access_token(state, token_data)?;
-    }
+    persist_access_token(state, &token_data)?;
 
     Ok(token)
 }
@@ -1461,14 +1323,7 @@ fn issue_refresh_token(
         revoked: false,
     };
 
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-    store.refresh_tokens.insert(token.clone(), token_data);
-    if let Some(token_data) = store.refresh_tokens.get(&token) {
-        persist_refresh_token(state, token_data)?;
-    }
+    persist_refresh_token(state, &token_data)?;
 
     Ok(token)
 }
@@ -1605,7 +1460,6 @@ mod tests {
     #[tokio::test]
     async fn stepup_validation_succeeds_for_fresh_session() {
         let state = build_state(PermissionEnforcementMode::Enforce);
-        let mut store = state.store.lock().unwrap();
         let now = Utc::now();
         let session = crate::models::PanelSession {
             id: "session-1".to_string(),
@@ -1614,8 +1468,7 @@ mod tests {
             issued_at: now,
             expires_at: now + chrono::Duration::minutes(15),
         };
-        store.panel_sessions.insert(session.id.clone(), session);
-        drop(store);
+        state.persist_panel_session(&session).expect("persist panel session");
 
         let mut headers = HeaderMap::new();
         headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
@@ -1647,7 +1500,6 @@ mod tests {
     #[tokio::test]
     async fn stepup_validation_fails_for_wrong_actor() {
         let state = build_state(PermissionEnforcementMode::Enforce);
-        let mut store = state.store.lock().unwrap();
         let now = Utc::now();
         let session = crate::models::PanelSession {
             id: "session-1".to_string(),
@@ -1656,8 +1508,7 @@ mod tests {
             issued_at: now,
             expires_at: now + chrono::Duration::minutes(15),
         };
-        store.panel_sessions.insert(session.id.clone(), session);
-        drop(store);
+        state.persist_panel_session(&session).expect("persist panel session");
 
         let mut headers = HeaderMap::new();
         headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
@@ -1669,7 +1520,6 @@ mod tests {
     #[tokio::test]
     async fn stepup_validation_fails_for_expired_session() {
         let state = build_state(PermissionEnforcementMode::Enforce);
-        let mut store = state.store.lock().unwrap();
         let now = Utc::now();
         let session = crate::models::PanelSession {
             id: "session-1".to_string(),
@@ -1678,8 +1528,7 @@ mod tests {
             issued_at: now - chrono::Duration::minutes(20),
             expires_at: now - chrono::Duration::minutes(5),
         };
-        store.panel_sessions.insert(session.id.clone(), session);
-        drop(store);
+        state.persist_panel_session(&session).expect("persist panel session");
 
         let mut headers = HeaderMap::new();
         headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
@@ -1691,7 +1540,6 @@ mod tests {
     #[tokio::test]
     async fn stepup_validation_fails_for_stale_session() {
         let state = build_state(PermissionEnforcementMode::Enforce);
-        let mut store = state.store.lock().unwrap();
         let now = Utc::now();
         // Session was issued 400 seconds ago, but freshness window is 300 seconds
         let session = crate::models::PanelSession {
@@ -1701,8 +1549,7 @@ mod tests {
             issued_at: now - chrono::Duration::seconds(400),
             expires_at: now + chrono::Duration::minutes(15),
         };
-        store.panel_sessions.insert(session.id.clone(), session);
-        drop(store);
+        state.persist_panel_session(&session).expect("persist panel session");
 
         let mut headers = HeaderMap::new();
         headers.insert("x-panel-session-id", HeaderValue::from_static("session-1"));
@@ -1793,9 +1640,13 @@ mod tests {
     #[test]
     fn e2e_admin_audit_event_emission() {
         let state = build_state(PermissionEnforcementMode::Enforce);
-        let mut store = state.store.lock().unwrap();
-
-        assert_eq!(store.admin_audit_events.len(), 0);
+        assert_eq!(
+            state
+                .load_admin_audit_events()
+                .expect("load audit events")
+                .len(),
+            0
+        );
 
         let admin_ctx = AdminRequestContext {
             actor_account_id: "admin-1".to_string(),
@@ -1804,7 +1655,6 @@ mod tests {
 
         append_admin_audit_event(
             &state,
-            &mut store,
             &admin_ctx,
             "register_client",
             "oauth_client",
@@ -1812,8 +1662,9 @@ mod tests {
             DECISION_ALLOW,
         );
 
-        assert_eq!(store.admin_audit_events.len(), 1);
-        let event = &store.admin_audit_events[0];
+        let events = state.load_admin_audit_events().expect("load audit events");
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
         assert_eq!(event.actor_account_id, "admin-1");
         assert_eq!(event.operation, "register_client");
         assert_eq!(event.target_type, "oauth_client");
@@ -2044,9 +1895,10 @@ mod tests {
     #[test]
     fn negative_test_client_not_found() {
         let state = build_state(PermissionEnforcementMode::Enforce);
-        let store = state.store.lock().unwrap();
 
-        let result = store.clients.get("nonexistent");
+        let result = state
+            .load_oauth_client("nonexistent")
+            .expect("load oauth client");
         assert!(result.is_none());
     }
 
