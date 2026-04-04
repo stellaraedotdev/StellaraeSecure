@@ -141,8 +141,8 @@ Client ownership model:
 
 Persistence model:
 
-- OAuth client records, access tokens, refresh tokens, and authorization codes remain in memory for now.
-- Admin audit events and panel sessions are persisted to the SQLite database configured by `DATABASE_URL`.
+- OAuth client records, pending consent records, authorization codes, access tokens, and refresh tokens are persisted to the SQLite database configured by `DATABASE_URL`.
+- Admin audit events and panel sessions are also persisted to the same SQLite database.
 - `sqlite::memory:` is accepted for tests; file-backed SQLite URLs are also supported.
 
 Admin API namespace:

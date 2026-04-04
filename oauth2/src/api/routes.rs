@@ -332,6 +332,7 @@ async fn register_client(
         .lock()
         .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
     store.clients.insert(client_id.clone(), client);
+    persist_client(&state, store.clients.get(&client_id).expect("client just inserted"))?;
 
     append_admin_audit_event(
         &state,
@@ -365,13 +366,8 @@ async fn get_client(
     let admin = require_admin_permission(&state, &headers, PERM_OAUTH_CLIENT_READ, "get_client")
         .await?;
     let caller_account_id = admin.actor_account_id.clone();
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    let client = store.clients.get(&client_id).ok_or(AppError::NotFound)?;
-    ensure_client_access(&caller_account_id, client)?;
+    let client = load_client(&state, &client_id)?;
+    ensure_client_access(&caller_account_id, &client)?;
 
     Ok(Json(ClientResponse {
         client_id: client.client_id.clone(),
@@ -430,6 +426,10 @@ async fn add_collaborator(
         }
     };
 
+    if let Some(client) = store.clients.get(&client_id) {
+        persist_client(&state, client)?;
+    }
+
     append_admin_audit_event(
         &state,
         &mut store,
@@ -457,13 +457,8 @@ async fn list_collaborators(
     .await?;
 
     let caller_account_id = admin.actor_account_id.clone();
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    let client = store.clients.get(&client_id).ok_or(AppError::NotFound)?;
-    ensure_client_access(&caller_account_id, client)?;
+    let client = load_client(&state, &client_id)?;
+    ensure_client_access(&caller_account_id, &client)?;
 
     Ok(Json(CollaboratorsResponse {
         client_id: client.client_id.clone(),
@@ -495,6 +490,7 @@ async fn remove_collaborator(
     ensure_client_access(&caller_account_id, client)?;
 
     client.collaborator_account_ids.retain(|id| id != &account_id);
+    persist_client(&state, client)?;
     append_admin_audit_event(
         &state,
         &mut store,
@@ -519,17 +515,7 @@ async fn authorize(
         ));
     }
 
-    let client = {
-        let store = state
-            .store
-            .lock()
-            .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-        store
-            .clients
-            .get(&query.client_id)
-            .cloned()
-            .ok_or(AppError::NotFound)?
-    };
+    let client = load_client(&state, &query.client_id)?;
 
     if !client.redirect_uris.iter().any(|u| u == &query.redirect_uri) {
         return Err(AppError::Validation("redirect_uri mismatch".to_string()));
@@ -597,6 +583,10 @@ async fn authorize(
         .pending_consents
         .insert(pending.request_id.clone(), pending);
 
+    if let Some(consent) = store.pending_consents.get(&response.request_id) {
+        persist_pending_consent(&state, consent)?;
+    }
+
     Ok(Json(response))
 }
 
@@ -608,17 +598,7 @@ async fn consent(
     assert_admin_key(&state, &headers)?;
     let actor_account_id = verified_staff_actor_id(&state, &headers)?;
 
-    let pending = {
-        let mut store = state
-            .store
-            .lock()
-            .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-        store
-            .pending_consents
-            .remove(&payload.request_id)
-            .ok_or(AppError::NotFound)?
-    };
+    let pending = take_pending_consent(&state, &payload.request_id)?;
 
     if actor_account_id != pending.account_id {
         return Err(AppError::Authorization);
@@ -650,13 +630,7 @@ async fn consent(
         expires_at: now_plus_seconds(state.config.auth_code_ttl_seconds),
     };
 
-    {
-        let mut store = state
-            .store
-            .lock()
-            .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-        store.auth_codes.insert(code.clone(), auth_code);
-    }
+    persist_auth_code(&state, &auth_code)?;
 
     let callback = with_query(
         &pending.redirect_uri,
@@ -685,13 +659,7 @@ async fn token(
             .as_deref()
             .ok_or_else(|| AppError::Validation("redirect_uri is required".to_string()))?;
 
-        let auth_code = {
-            let mut store = state
-                .store
-                .lock()
-                .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-            store.auth_codes.remove(code).ok_or(AppError::Authentication)?
-        };
+        let auth_code = take_auth_code(&state, code)?.ok_or(AppError::Authentication)?;
 
         if auth_code.client_id != client.client_id || auth_code.redirect_uri != redirect_uri {
             return Err(AppError::Authentication);
@@ -731,24 +699,15 @@ async fn token(
             .as_deref()
             .ok_or_else(|| AppError::Validation("refresh_token is required".to_string()))?;
 
-        let refresh_data = {
-            let mut store = state
-                .store
-                .lock()
-                .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-            let mut token = store
-                .refresh_tokens
-                .remove(refresh)
-                .ok_or(AppError::Authentication)?;
-            if token.revoked || Utc::now() > token.expires_at {
-                return Err(AppError::Authentication);
-            }
-            if token.client_id != client.client_id {
-                return Err(AppError::Authentication);
-            }
-            token.revoked = true;
-            token
-        };
+        let mut refresh_data = take_refresh_token(&state, refresh)?.ok_or(AppError::Authentication)?;
+        if refresh_data.revoked || Utc::now() > refresh_data.expires_at {
+            return Err(AppError::Authentication);
+        }
+        if refresh_data.client_id != client.client_id {
+            return Err(AppError::Authentication);
+        }
+        refresh_data.revoked = true;
+        persist_refresh_token(&state, &refresh_data)?;
 
         let access_token = issue_access_token(
             &state,
@@ -791,6 +750,15 @@ async fn revoke(
     )
     .await?;
 
+    if let Some(mut token) = load_access_token(&state, &payload.token)? {
+        token.revoked = true;
+        persist_access_token(&state, &token)?;
+    }
+    if let Some(mut token) = load_refresh_token(&state, &payload.token)? {
+        token.revoked = true;
+        persist_refresh_token(&state, &token)?;
+    }
+
     let mut store = state
         .store
         .lock()
@@ -829,12 +797,7 @@ async fn introspect(
     )
     .await?;
 
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    if let Some(token) = store.access_tokens.get(&payload.token) {
+    if let Some(token) = load_access_token(&state, &payload.token)? {
         let active = !token.revoked && Utc::now() <= token.expires_at;
         return Ok(Json(IntrospectResponse {
             active,
@@ -851,7 +814,7 @@ async fn introspect(
         }));
     }
 
-    if let Some(token) = store.refresh_tokens.get(&payload.token) {
+    if let Some(token) = load_refresh_token(&state, &payload.token)? {
         let active = !token.revoked && Utc::now() <= token.expires_at;
         return Ok(Json(IntrospectResponse {
             active,
@@ -1116,6 +1079,107 @@ fn load_panel_session(
     Ok(store.panel_sessions.get(session_id).cloned())
 }
 
+fn load_client(state: &AppState, client_id: &str) -> Result<OAuthClient, AppError> {
+    if let Some(client) = state.load_oauth_client(client_id)? {
+        return Ok(client);
+    }
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    store.clients.get(client_id).cloned().ok_or(AppError::NotFound)
+}
+
+fn persist_client(state: &AppState, client: &OAuthClient) -> Result<(), AppError> {
+    state.persist_oauth_client(client)
+}
+
+fn persist_pending_consent(state: &AppState, consent: &PendingConsent) -> Result<(), AppError> {
+    state.persist_pending_consent(consent)
+}
+
+fn take_pending_consent(state: &AppState, request_id: &str) -> Result<PendingConsent, AppError> {
+    if let Some(consent) = state.take_pending_consent(request_id)? {
+        return Ok(consent);
+    }
+
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    store
+        .pending_consents
+        .remove(request_id)
+        .ok_or(AppError::NotFound)
+}
+
+fn persist_auth_code(state: &AppState, auth_code: &AuthorizationCode) -> Result<(), AppError> {
+    state.persist_auth_code(auth_code)
+}
+
+fn take_auth_code(state: &AppState, code: &str) -> Result<Option<AuthorizationCode>, AppError> {
+    if let Some(auth_code) = state.take_auth_code(code)? {
+        return Ok(Some(auth_code));
+    }
+
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    Ok(store.auth_codes.remove(code))
+}
+
+fn persist_access_token(state: &AppState, token: &AccessToken) -> Result<(), AppError> {
+    state.persist_access_token(token)
+}
+
+fn load_access_token(state: &AppState, token: &str) -> Result<Option<AccessToken>, AppError> {
+    if let Some(token_data) = state.load_access_token(token)? {
+        return Ok(Some(token_data));
+    }
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    Ok(store.access_tokens.get(token).cloned())
+}
+
+fn persist_refresh_token(state: &AppState, token: &RefreshToken) -> Result<(), AppError> {
+    state.persist_refresh_token(token)
+}
+
+fn take_refresh_token(state: &AppState, token: &str) -> Result<Option<RefreshToken>, AppError> {
+    if let Some(token_data) = state.load_refresh_token(token)? {
+        return Ok(Some(token_data));
+    }
+
+    let mut store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    Ok(store.refresh_tokens.remove(token))
+}
+
+fn load_refresh_token(state: &AppState, token: &str) -> Result<Option<RefreshToken>, AppError> {
+    if let Some(token_data) = state.load_refresh_token(token)? {
+        return Ok(Some(token_data));
+    }
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    Ok(store.refresh_tokens.get(token).cloned())
+}
+
 fn verified_staff_actor_id(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
     let account_id = headers
         .get("x-staff-account-id")
@@ -1341,12 +1405,7 @@ fn parse_scope(scope: &str) -> Vec<String> {
 }
 
 fn validate_client(state: &AppState, client_id: &str, client_secret: &str) -> Result<OAuthClient, AppError> {
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    let client = store.clients.get(client_id).ok_or(AppError::Authentication)?;
+    let client = load_client(state, client_id)?;
     if client.client_secret_hash != sha256_hex(client_secret) {
         return Err(AppError::Authentication);
     }
@@ -1377,6 +1436,9 @@ fn issue_access_token(
         .lock()
         .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
     store.access_tokens.insert(token.clone(), token_data);
+    if let Some(token_data) = store.access_tokens.get(&token) {
+        persist_access_token(state, token_data)?;
+    }
 
     Ok(token)
 }
@@ -1404,6 +1466,9 @@ fn issue_refresh_token(
         .lock()
         .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
     store.refresh_tokens.insert(token.clone(), token_data);
+    if let Some(token_data) = store.refresh_tokens.get(&token) {
+        persist_refresh_token(state, token_data)?;
+    }
 
     Ok(token)
 }
@@ -1433,10 +1498,16 @@ mod tests {
         validate_stepup_session_freshness, ensure_client_access, assert_admin_key,
         append_admin_audit_event,
         load_panel_session,
+        load_client, persist_client, persist_pending_consent, take_pending_consent,
+        persist_auth_code, take_auth_code, persist_access_token, load_access_token,
+        persist_refresh_token, load_refresh_token,
         PERM_OAUTH_CLIENT_CREATE, PERM_OAUTH_CLIENT_READ,
         PERM_OAUTH_TOKEN_REVOKE, DECISION_ALLOW,
     };
-    use crate::models::{AdminAuditEvent, OAuthClient, PanelSession};
+    use crate::models::{
+        AccessToken, AdminAuditEvent, AuthorizationCode, OAuthClient, PanelSession,
+        PendingConsent, RefreshToken,
+    };
     use super::AdminRequestContext;
     use chrono::Utc;
 
@@ -1793,6 +1864,112 @@ mod tests {
         assert_eq!(loaded.id, session.id);
         assert_eq!(loaded.account_id, session.account_id);
         assert_eq!(loaded.permissions, session.permissions);
+    }
+
+    #[test]
+    fn database_persists_oauth_client_records() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let client = OAuthClient {
+            client_id: "client-db-1".to_string(),
+            client_secret_hash: "hash".to_string(),
+            name: "Persisted Client".to_string(),
+            redirect_uris: vec!["https://example.test/callback".to_string()],
+            allowed_scopes: vec!["openid".to_string()],
+            audience: "public".to_string(),
+            owner_account_id: "owner-1".to_string(),
+            collaborator_account_ids: vec!["collab-1".to_string()],
+            created_at: Utc::now(),
+        };
+
+        persist_client(&state, &client).expect("persist client");
+
+        let loaded = load_client(&state, &client.client_id).expect("load client");
+        assert_eq!(loaded.client_id, client.client_id);
+        assert_eq!(loaded.name, client.name);
+        assert_eq!(loaded.collaborator_account_ids, client.collaborator_account_ids);
+    }
+
+    #[test]
+    fn database_persists_pending_consents_and_auth_codes() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let pending = PendingConsent {
+            request_id: "request-db-1".to_string(),
+            client_id: "client-db-1".to_string(),
+            redirect_uri: "https://example.test/callback".to_string(),
+            state: Some("state-1".to_string()),
+            scope: vec!["openid".to_string()],
+            account_id: "account-1".to_string(),
+            account_type: "staff".to_string(),
+            effective_permissions: vec!["panel.audit.read".to_string()],
+            expires_at: Utc::now() + chrono::Duration::minutes(5),
+        };
+
+        persist_pending_consent(&state, &pending).expect("persist pending consent");
+        let loaded_pending = take_pending_consent(&state, &pending.request_id)
+            .expect("take pending consent");
+        assert_eq!(loaded_pending.request_id, pending.request_id);
+
+        let auth_code = AuthorizationCode {
+            code: "code-db-1".to_string(),
+            client_id: pending.client_id.clone(),
+            account_id: pending.account_id.clone(),
+            scope: pending.scope.clone(),
+            effective_permissions: pending.effective_permissions.clone(),
+            redirect_uri: pending.redirect_uri.clone(),
+            expires_at: Utc::now() + chrono::Duration::minutes(5),
+        };
+
+        persist_auth_code(&state, &auth_code).expect("persist auth code");
+        let loaded_auth_code = take_auth_code(&state, &auth_code.code)
+            .expect("take auth code")
+            .expect("auth code exists");
+        assert_eq!(loaded_auth_code.code, auth_code.code);
+        assert_eq!(loaded_auth_code.client_id, auth_code.client_id);
+    }
+
+    #[test]
+    fn database_persists_tokens_and_revocation_state() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let access_token = AccessToken {
+            token: "access-db-1".to_string(),
+            client_id: "client-db-1".to_string(),
+            account_id: "account-1".to_string(),
+            scope: vec!["openid".to_string()],
+            effective_permissions: vec!["oauth.token.introspect".to_string()],
+            expires_at: Utc::now() + chrono::Duration::minutes(10),
+            revoked: false,
+        };
+        let refresh_token = RefreshToken {
+            token: "refresh-db-1".to_string(),
+            client_id: "client-db-1".to_string(),
+            account_id: "account-1".to_string(),
+            scope: vec!["openid".to_string()],
+            effective_permissions: vec!["oauth.token.introspect".to_string()],
+            expires_at: Utc::now() + chrono::Duration::minutes(30),
+            revoked: false,
+        };
+
+        persist_access_token(&state, &access_token).expect("persist access token");
+        persist_refresh_token(&state, &refresh_token).expect("persist refresh token");
+
+        let loaded_access = load_access_token(&state, &access_token.token)
+            .expect("load access token")
+            .expect("access token exists");
+        assert_eq!(loaded_access.token, access_token.token);
+
+        let loaded_refresh = load_refresh_token(&state, &refresh_token.token)
+            .expect("load refresh token")
+            .expect("refresh token exists");
+        assert_eq!(loaded_refresh.token, refresh_token.token);
+
+        let mut revoked_access = loaded_access.clone();
+        revoked_access.revoked = true;
+        persist_access_token(&state, &revoked_access).expect("update access token");
+
+        let updated_access = load_access_token(&state, &access_token.token)
+            .expect("reload access token")
+            .expect("access token exists after update");
+        assert!(updated_access.revoked);
     }
 
     // =====================================================================

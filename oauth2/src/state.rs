@@ -5,6 +5,7 @@ use chrono::{Duration, Utc};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::config::Config;
 use crate::error::AppError;
@@ -44,13 +45,56 @@ impl AppState {
             .map_err(|error| AppError::Config(format!("failed to open oauth2 database: {error}")))?;
         initialize_schema(&connection)?;
 
-        Self {
+        Ok(Self {
             config,
             store: Arc::new(Mutex::new(MemoryStore::default())),
             db: Arc::new(Mutex::new(connection)),
             http_client: reqwest::Client::new(),
-        }
-        .pipe(Ok)
+        })
+    }
+
+    pub fn persist_oauth_client(&self, client: &OAuthClient) -> Result<(), AppError> {
+        persist_json_row(&self.db, "oauth_clients", "id", &client.client_id, client)
+    }
+
+    pub fn load_oauth_client(&self, client_id: &str) -> Result<Option<OAuthClient>, AppError> {
+        load_json_row(&self.db, "oauth_clients", "id", client_id)
+    }
+
+    pub fn persist_pending_consent(&self, consent: &PendingConsent) -> Result<(), AppError> {
+        persist_json_row(&self.db, "pending_consents", "request_id", &consent.request_id, consent)
+    }
+
+    pub fn take_pending_consent(&self, request_id: &str) -> Result<Option<PendingConsent>, AppError> {
+        take_json_row(&self.db, "pending_consents", "request_id", request_id)
+    }
+
+    pub fn persist_auth_code(&self, auth_code: &AuthorizationCode) -> Result<(), AppError> {
+        persist_json_row(&self.db, "authorization_codes", "code", &auth_code.code, auth_code)
+    }
+
+    pub fn take_auth_code(&self, code: &str) -> Result<Option<AuthorizationCode>, AppError> {
+        take_json_row(&self.db, "authorization_codes", "code", code)
+    }
+
+    pub fn persist_access_token(&self, token: &AccessToken) -> Result<(), AppError> {
+        persist_json_row(&self.db, "access_tokens", "token", &token.token, token)
+    }
+
+    pub fn load_access_token(&self, token: &str) -> Result<Option<AccessToken>, AppError> {
+        load_json_row(&self.db, "access_tokens", "token", token)
+    }
+
+    pub fn persist_refresh_token(&self, token: &RefreshToken) -> Result<(), AppError> {
+        persist_json_row(&self.db, "refresh_tokens", "token", &token.token, token)
+    }
+
+    pub fn load_refresh_token(&self, token: &str) -> Result<Option<RefreshToken>, AppError> {
+        load_json_row(&self.db, "refresh_tokens", "token", token)
+    }
+
+    pub fn save_refresh_token(&self, token: &RefreshToken) -> Result<(), AppError> {
+        persist_json_row(&self.db, "refresh_tokens", "token", &token.token, token)
     }
 
     pub fn persist_admin_audit_event(&self, event: &AdminAuditEvent) -> Result<(), AppError> {
@@ -251,6 +295,31 @@ fn initialize_schema(connection: &Connection) -> Result<(), AppError> {
     connection
         .execute_batch(
             r#"
+            CREATE TABLE IF NOT EXISTS oauth_clients (
+                id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS pending_consents (
+                request_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS authorization_codes (
+                code TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS access_tokens (
+                token TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+                token TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS admin_audit_events (
                 id TEXT PRIMARY KEY,
                 actor_account_id TEXT NOT NULL,
@@ -283,13 +352,75 @@ fn initialize_schema(connection: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
-trait Pipe: Sized {
-    fn pipe<T, F: FnOnce(Self) -> T>(self, f: F) -> T {
-        f(self)
-    }
+fn persist_json_row<T: Serialize>(
+    db: &Arc<Mutex<Connection>>,
+    table: &str,
+    key_column: &str,
+    key_value: &str,
+    value: &T,
+) -> Result<(), AppError> {
+    let connection = db
+        .lock()
+        .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
+    let payload = serde_json::to_string(value)
+        .map_err(|error| AppError::Internal(format!("failed to serialize record: {error}")))?;
+
+    let statement = format!(
+        "INSERT INTO {table} ({key_column}, payload_json) VALUES (?1, ?2) ON CONFLICT({key_column}) DO UPDATE SET payload_json = excluded.payload_json"
+    );
+
+    connection
+        .execute(&statement, params![key_value, payload])
+        .map_err(|error| AppError::Internal(format!("failed to persist record: {error}")))?;
+
+    Ok(())
 }
 
-impl<T> Pipe for T {}
+fn load_json_row<T: DeserializeOwned>(
+    db: &Arc<Mutex<Connection>>,
+    table: &str,
+    key_column: &str,
+    key_value: &str,
+) -> Result<Option<T>, AppError> {
+    let connection = db
+        .lock()
+        .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
+    let statement = format!("SELECT payload_json FROM {table} WHERE {key_column} = ?1");
+    let mut query = connection
+        .prepare(&statement)
+        .map_err(|error| AppError::Internal(format!("failed to prepare record lookup: {error}")))?;
+
+    let payload: Option<String> = query
+        .query_row([key_value], |row| row.get(0))
+        .optional()
+        .map_err(|error| AppError::Internal(format!("failed to query record: {error}")))?;
+
+    payload
+        .map(|payload| {
+            serde_json::from_str(&payload)
+                .map_err(|error| AppError::Internal(format!("failed to deserialize record: {error}")))
+        })
+        .transpose()
+}
+
+fn take_json_row<T: DeserializeOwned>(
+    db: &Arc<Mutex<Connection>>,
+    table: &str,
+    key_column: &str,
+    key_value: &str,
+) -> Result<Option<T>, AppError> {
+    let record = load_json_row(db, table, key_column, key_value)?;
+    if record.is_some() {
+        let connection = db
+            .lock()
+            .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
+        let statement = format!("DELETE FROM {table} WHERE {key_column} = ?1");
+        connection
+            .execute(&statement, params![key_value])
+            .map_err(|error| AppError::Internal(format!("failed to delete record: {error}")))?;
+    }
+    Ok(record)
+}
 
 pub fn generate_secret(len: usize) -> String {
     thread_rng()

@@ -14,7 +14,7 @@ pub struct OAuthClient {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingConsent {
     pub request_id: String,
     pub client_id: String,
@@ -27,7 +27,7 @@ pub struct PendingConsent {
     pub expires_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationCode {
     pub code: String,
     pub client_id: String,
@@ -38,7 +38,7 @@ pub struct AuthorizationCode {
     pub expires_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessToken {
     pub token: String,
     pub client_id: String,
@@ -49,7 +49,7 @@ pub struct AccessToken {
     pub revoked: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefreshToken {
     pub token: String,
     pub client_id: String,
