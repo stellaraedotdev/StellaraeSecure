@@ -77,4 +77,4 @@ npm run dev
 	signed identity headers and step-up session IDs are not persisted across reloads.
 - API-issued panel sessions require signed headers: `x-admin-key`, `x-staff-account-id`, `x-staff-identity-ts`, `x-staff-identity-sig`.
 - High-risk admin actions require a fresh panel session id (`x-panel-session-id`) and will fail if the session is missing or stale.
-- Backend-missing operations (`client delete`, `secret rotate`) are intentionally deferred until API endpoints are available.
+- Client lifecycle operations now include `client delete` and `secret rotate`, both enforced as high-risk step-up actions.

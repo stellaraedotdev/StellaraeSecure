@@ -3,16 +3,19 @@ import { useAuth } from '../auth/AuthContext'
 import { appConfig } from '../lib/config'
 import {
   addCollaborator,
+  deleteClient,
   getClient,
   introspectToken,
   listCollaborators,
   removeCollaborator,
+  rotateClientSecret,
   revokeToken,
 } from '../api/oauth2'
 import type {
   ClientResponse,
   CollaboratorsResponse,
   IntrospectResponse,
+  RotateClientSecretResponse,
 } from '../types/oauth2'
 import { isUnauthorized, toUserMessage } from '../lib/apiErrors'
 import { useApiAction } from '../hooks/useApiAction'
@@ -28,6 +31,7 @@ export function AdminHomePage() {
   const [collaboratorsResult, setCollaboratorsResult] = useState<CollaboratorsResponse | null>(null)
   const [introspectResult, setIntrospectResult] = useState<IntrospectResponse | null>(null)
   const [revokeStatus, setRevokeStatus] = useState<string | null>(null)
+  const [rotateResult, setRotateResult] = useState<RotateClientSecretResponse | null>(null)
   const { busy, error, run, setError } = useApiAction({
     onError: (apiError) => {
       if (isUnauthorized(apiError)) {
@@ -88,6 +92,32 @@ export function AdminHomePage() {
     )
     if (result !== null) {
       setRevokeStatus('Token revoked successfully.')
+    }
+  }
+
+  async function runRotateSecret() {
+    const stepupSessionId = session?.panelSessionId ?? ''
+    const result = await runWithGuard(() =>
+      rotateClientSecret(signedIdentity!, clientId, stepupSessionId),
+    )
+    if (result) {
+      setRotateResult(result)
+      setRevokeStatus('Client secret rotated successfully.')
+    }
+  }
+
+  async function runDeleteClient() {
+    const stepupSessionId = session?.panelSessionId ?? ''
+    const result = await runWithGuard(() =>
+      deleteClient(signedIdentity!, clientId, stepupSessionId),
+    )
+    if (result !== null) {
+      setClientResult(null)
+      setCollaboratorsResult(null)
+      setRotateResult(null)
+      setRevokeStatus('Client deleted successfully.')
+      setClientId('')
+      setCollaboratorAccountId('')
     }
   }
 
@@ -181,17 +211,28 @@ export function AdminHomePage() {
 
       <article className="surface-card">
           <p className="chip">oauth.client.secret.rotate / oauth.client.delete</p>
-          <h3>Client Lifecycle (Pending API)</h3>
-          <p>
-            Secret rotation and client deletion require backend endpoints that are not
-            available yet. Controls are staged here for visibility and release planning.
-          </p>
+          <h3>Client Lifecycle Operations</h3>
+          <p>High-risk client controls requiring fresh step-up panel sessions.</p>
           <div className="button-row">
-            <button type="button" className="ghost-btn" disabled>
-              Rotate Client Secret (Coming Soon)
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                void runRotateSecret()
+              }}
+              disabled={busy || !clientId.trim() || !session?.panelSessionId}
+            >
+              Rotate Client Secret
             </button>
-            <button type="button" className="ghost-btn" disabled>
-              Delete Client (Coming Soon)
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                void runDeleteClient()
+              }}
+              disabled={busy || !clientId.trim() || !session?.panelSessionId}
+            >
+              Delete Client
             </button>
           </div>
       </article>
@@ -219,6 +260,11 @@ export function AdminHomePage() {
         {introspectResult ? (
           <p>
             Introspect: <strong>{introspectResult.active ? 'active' : 'inactive'}</strong>
+          </p>
+        ) : null}
+        {rotateResult ? (
+          <p>
+            New secret for {rotateResult.client_id}: <strong>{rotateResult.client_secret}</strong>
           </p>
         ) : null}
       </section>

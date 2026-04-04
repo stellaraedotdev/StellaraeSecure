@@ -138,7 +138,10 @@ mod tests {
             .expect("role creation should succeed");
 
         let permission = rbac_repo
-            .create_permission("oauth.client.create", Some("Create OAuth clients"))
+            .create_permission(
+                "oauth.client.create.integration_test",
+                Some("Create OAuth clients"),
+            )
             .await
             .expect("permission creation should succeed");
 
@@ -156,7 +159,7 @@ mod tests {
             .get_effective_permissions(&account.id)
             .await
             .expect("effective permission lookup should succeed");
-        assert_eq!(effective, vec!["oauth.client.create".to_string()]);
+        assert_eq!(effective, vec!["oauth.client.create.integration_test".to_string()]);
 
         rbac_repo
             .revoke_role_from_account(&account.id, &role.id)

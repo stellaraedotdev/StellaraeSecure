@@ -13,6 +13,8 @@ const apiMocks = vi.hoisted(() => ({
   removeCollaborator: vi.fn(),
   introspectToken: vi.fn(),
   revokeToken: vi.fn(),
+  rotateClientSecret: vi.fn(),
+  deleteClient: vi.fn(),
 }))
 
 vi.mock('../api/oauth2', () => ({
@@ -22,6 +24,8 @@ vi.mock('../api/oauth2', () => ({
   removeCollaborator: apiMocks.removeCollaborator,
   introspectToken: apiMocks.introspectToken,
   revokeToken: apiMocks.revokeToken,
+  rotateClientSecret: apiMocks.rotateClientSecret,
+  deleteClient: apiMocks.deleteClient,
 }))
 
 function seedSession() {
@@ -201,5 +205,41 @@ describe('AdminHomePage', () => {
     await waitFor(() => {
       expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull()
     })
+  })
+
+  it('rotates client secret and deletes a client with step-up context', async () => {
+    apiMocks.rotateClientSecret.mockResolvedValue({
+      client_id: 'client-123',
+      client_secret: 'new-secret-value',
+    })
+    apiMocks.deleteClient.mockResolvedValue(undefined)
+
+    renderPage()
+
+    fireEvent.change(screen.getByPlaceholderText('oauth client id'), {
+      target: { value: 'client-123' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate Client Secret' }))
+    await waitFor(() => {
+      expect(apiMocks.rotateClientSecret).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'staff-1' }),
+        'client-123',
+        'panel-session-1',
+      )
+      expect(screen.getByText(/new-secret-value/i)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Client' }))
+    await waitFor(() => {
+      expect(apiMocks.deleteClient).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'staff-1' }),
+        'client-123',
+        'panel-session-1',
+      )
+      expect(screen.getByText('Client deleted successfully.')).toBeInTheDocument()
+    })
+
+    expect((screen.getByPlaceholderText('oauth client id') as HTMLInputElement).value).toBe('')
   })
 })

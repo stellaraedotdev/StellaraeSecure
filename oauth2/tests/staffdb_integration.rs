@@ -81,6 +81,11 @@ async fn lookup_account_uses_expected_query_and_auth_header() {
                 .and_then(|value| value.to_str().ok())
                 .expect("authorization header");
             assert_eq!(authorization, "Bearer staffdb-key");
+            let correlation_id = headers
+                .get("x-correlation-id")
+                .and_then(|value| value.to_str().ok())
+                .expect("correlation id header");
+            assert_eq!(correlation_id, "corr-lookup");
             assert_eq!(query.username.as_deref(), Some("alice"));
             assert_eq!(query.email, None);
 
@@ -97,7 +102,7 @@ async fn lookup_account_uses_expected_query_and_auth_header() {
     let base_url = spawn_mock_staffdb(router).await;
     let state = build_state(base_url);
 
-    let account = staffdb::lookup_account(&state, Some("alice"), None)
+    let account = staffdb::lookup_account(&state, Some("alice"), None, "corr-lookup")
         .await
         .expect("lookup account");
 
@@ -117,6 +122,11 @@ async fn get_account_by_id_hits_expected_path() {
                 .and_then(|value| value.to_str().ok())
                 .expect("authorization header");
             assert_eq!(authorization, "Bearer staffdb-key");
+            let correlation_id = headers
+                .get("x-correlation-id")
+                .and_then(|value| value.to_str().ok())
+                .expect("correlation id header");
+            assert_eq!(correlation_id, "corr-account");
             assert_eq!(account_id, "account-2");
 
             Json(AccountFixture {
@@ -132,7 +142,7 @@ async fn get_account_by_id_hits_expected_path() {
     let base_url = spawn_mock_staffdb(router).await;
     let state = build_state(base_url);
 
-    let account = staffdb::get_account_by_id(&state, "account-2")
+    let account = staffdb::get_account_by_id(&state, "account-2", "corr-account")
         .await
         .expect("get account by id");
 
@@ -151,6 +161,11 @@ async fn get_effective_permissions_parses_permission_payload() {
                 .and_then(|value| value.to_str().ok())
                 .expect("authorization header");
             assert_eq!(authorization, "Bearer staffdb-key");
+            let correlation_id = headers
+                .get("x-correlation-id")
+                .and_then(|value| value.to_str().ok())
+                .expect("correlation id header");
+            assert_eq!(correlation_id, "corr-perms");
             assert_eq!(account_id, "account-3");
 
             Json(EffectivePermissionsFixture {
@@ -166,7 +181,7 @@ async fn get_effective_permissions_parses_permission_payload() {
     let base_url = spawn_mock_staffdb(router).await;
     let state = build_state(base_url);
 
-    let permissions = staffdb::get_effective_permissions(&state, "account-3")
+    let permissions = staffdb::get_effective_permissions(&state, "account-3", "corr-perms")
         .await
         .expect("effective permissions");
 

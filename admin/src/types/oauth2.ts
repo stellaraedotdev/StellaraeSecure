@@ -39,6 +39,11 @@ export type ClientResponse = {
   created_at: string
 }
 
+export type RotateClientSecretResponse = {
+  client_id: string
+  client_secret: string
+}
+
 export type CollaboratorsResponse = {
   client_id: string
   owner_account_id: string

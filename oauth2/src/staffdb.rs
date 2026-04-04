@@ -18,7 +18,12 @@ pub struct EffectivePermissions {
     pub permissions: Vec<String>,
 }
 
-pub async fn lookup_account(state: &AppState, username: Option<&str>, email: Option<&str>) -> Result<StaffAccount, AppError> {
+pub async fn lookup_account(
+    state: &AppState,
+    username: Option<&str>,
+    email: Option<&str>,
+    correlation_id: &str,
+) -> Result<StaffAccount, AppError> {
     let mut url = format!("{}/api/accounts/lookup", state.config.staffdb_base_url.trim_end_matches('/'));
 
     let mut params = vec![];
@@ -41,6 +46,7 @@ pub async fn lookup_account(state: &AppState, username: Option<&str>, email: Opt
         .http_client
         .get(url)
         .bearer_auth(&state.config.staffdb_api_key)
+        .header("x-correlation-id", correlation_id)
         .send()
         .await
         .map_err(|e| AppError::Upstream(format!("staffdb request failed: {e}")))?;
@@ -59,7 +65,11 @@ pub async fn lookup_account(state: &AppState, username: Option<&str>, email: Opt
         .map_err(|e| AppError::Upstream(format!("invalid staffdb response: {e}")))
 }
 
-pub async fn get_account_by_id(state: &AppState, account_id: &str) -> Result<StaffAccount, AppError> {
+pub async fn get_account_by_id(
+    state: &AppState,
+    account_id: &str,
+    correlation_id: &str,
+) -> Result<StaffAccount, AppError> {
     let url = format!(
         "{}/api/accounts/{}",
         state.config.staffdb_base_url.trim_end_matches('/'),
@@ -70,6 +80,7 @@ pub async fn get_account_by_id(state: &AppState, account_id: &str) -> Result<Sta
         .http_client
         .get(url)
         .bearer_auth(&state.config.staffdb_api_key)
+        .header("x-correlation-id", correlation_id)
         .send()
         .await
         .map_err(|e| AppError::Upstream(format!("staffdb request failed: {e}")))?;
@@ -94,6 +105,7 @@ pub async fn get_account_by_id(state: &AppState, account_id: &str) -> Result<Sta
 pub async fn get_effective_permissions(
     state: &AppState,
     account_id: &str,
+    correlation_id: &str,
 ) -> Result<EffectivePermissions, AppError> {
     let url = format!(
         "{}/api/rbac/accounts/{}/permissions/effective",
@@ -105,6 +117,7 @@ pub async fn get_effective_permissions(
         .http_client
         .get(url)
         .bearer_auth(&state.config.staffdb_api_key)
+        .header("x-correlation-id", correlation_id)
         .send()
         .await
         .map_err(|e| AppError::Upstream(format!("staffdb request failed: {e}")))?;

@@ -62,6 +62,19 @@ impl AppState {
         load_json_row(&self.db, "oauth_clients", "id", client_id)
     }
 
+    pub fn delete_oauth_client(&self, client_id: &str) -> Result<(), AppError> {
+        let connection = self
+            .db
+            .lock()
+            .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
+
+        connection
+            .execute("DELETE FROM oauth_clients WHERE id = ?1", params![client_id])
+            .map_err(|error| AppError::Internal(format!("failed to delete oauth client: {error}")))?;
+
+        Ok(())
+    }
+
     pub fn persist_pending_consent(&self, consent: &PendingConsent) -> Result<(), AppError> {
         persist_json_row(&self.db, "pending_consents", "request_id", &consent.request_id, consent)
     }

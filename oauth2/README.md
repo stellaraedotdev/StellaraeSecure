@@ -121,6 +121,7 @@ Required environment variables:
 Admin endpoints remain guarded by `x-admin-key`.
 
 Include `x-correlation-id` on requests to make permission decision logs traceable across services. If omitted, oauth2 generates one automatically per decision path.
+oauth2 propagates the same `x-correlation-id` value to upstream `staffdb` requests for cross-service traceability.
 
 Current operation keys:
 
@@ -156,11 +157,17 @@ Admin API namespace:
 
 - `/api/admin/clients`
 - `/api/admin/clients/:client_id`
+- `/api/admin/clients/:client_id/secret`
 - `/api/admin/clients/:client_id/collaborators`
 - `/api/admin/clients/:client_id/collaborators/:account_id`
 - `/api/admin/tokens/revoke`
 - `/api/admin/tokens/introspect`
 - `/api/admin/audit/events`
+
+Client lifecycle endpoints:
+
+- `POST /api/admin/clients/:client_id/secret` rotates a client secret (step-up required).
+- `DELETE /api/admin/clients/:client_id` deletes a client (step-up required).
 
 Panel session endpoints:
 

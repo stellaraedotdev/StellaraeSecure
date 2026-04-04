@@ -102,6 +102,12 @@ struct ClientResponse {
     created_at: String,
 }
 
+#[derive(Debug, Serialize)]
+struct RotateClientSecretResponse {
+    client_id: String,
+    client_secret: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct CollaboratorRequest {
     account_id: String,
@@ -217,7 +223,14 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(healthz))
         .route("/ready", get(ready))
         .route("/api/clients", post(register_client))
-        .route("/api/clients/:client_id", get(get_client))
+        .route(
+            "/api/clients/:client_id",
+            get(get_client).delete(delete_client),
+        )
+        .route(
+            "/api/clients/:client_id/secret",
+            post(rotate_client_secret),
+        )
         .route(
             "/api/clients/:client_id/collaborators",
             post(add_collaborator).get(list_collaborators),
@@ -232,7 +245,14 @@ pub fn router(state: AppState) -> Router {
         .route("/api/revoke", post(revoke))
         .route("/api/introspect", post(introspect))
         .route("/api/admin/clients", post(register_client))
-        .route("/api/admin/clients/:client_id", get(get_client))
+        .route(
+            "/api/admin/clients/:client_id",
+            get(get_client).delete(delete_client),
+        )
+        .route(
+            "/api/admin/clients/:client_id/secret",
+            post(rotate_client_secret),
+        )
         .route(
             "/api/admin/clients/:client_id/collaborators",
             post(add_collaborator).get(list_collaborators),
@@ -482,6 +502,72 @@ async fn remove_collaborator(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn rotate_client_secret(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(client_id): Path<String>,
+) -> Result<Json<RotateClientSecretResponse>, AppError> {
+    let admin = require_admin_permission_with_stepup(
+        &state,
+        &headers,
+        PERM_OAUTH_CLIENT_SECRET_ROTATE,
+        "rotate_client_secret",
+    )
+    .await?;
+
+    let caller_account_id = admin.actor_account_id.clone();
+    let mut client = load_client(&state, &client_id)?;
+    ensure_client_access(&caller_account_id, &client)?;
+
+    let client_secret = generate_secret(48);
+    client.client_secret_hash = sha256_hex(&client_secret);
+    persist_client(&state, &client)?;
+
+    append_admin_audit_event(
+        &state,
+        &admin,
+        "rotate_client_secret",
+        "oauth_client",
+        &client_id,
+        DECISION_ALLOW,
+    );
+
+    Ok(Json(RotateClientSecretResponse {
+        client_id,
+        client_secret,
+    }))
+}
+
+async fn delete_client(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(client_id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let admin = require_admin_permission_with_stepup(
+        &state,
+        &headers,
+        PERM_OAUTH_CLIENT_DELETE,
+        "delete_client",
+    )
+    .await?;
+
+    let caller_account_id = admin.actor_account_id.clone();
+    let client = load_client(&state, &client_id)?;
+    ensure_client_access(&caller_account_id, &client)?;
+
+    delete_client_record(&state, &client_id)?;
+    append_admin_audit_event(
+        &state,
+        &admin,
+        "delete_client",
+        "oauth_client",
+        &client_id,
+        DECISION_ALLOW,
+    );
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn authorize(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -510,7 +596,8 @@ async fn authorize(
     }
 
     let actor_account_id = verified_staff_actor_id(&state, &headers)?;
-    let account = staffdb::get_account_by_id(&state, &actor_account_id).await?;
+    let correlation_id = correlation_id_from_headers(&headers);
+    let account = staffdb::get_account_by_id(&state, &actor_account_id, &correlation_id).await?;
     if !account.is_active {
         return Err(AppError::Authorization);
     }
@@ -521,7 +608,7 @@ async fn authorize(
     }
     if client.audience == "staff" {
         let permission_result =
-            staffdb::get_effective_permissions(&state, &account.id).await?;
+            staffdb::get_effective_permissions(&state, &account.id, &correlation_id).await?;
         effective_permissions = permission_result.permissions;
 
         enforce_permission_claim(
@@ -820,12 +907,15 @@ async fn issue_panel_session(
         require_admin_permission(&state, &headers, PERM_PANEL_SESSION_ISSUE, "issue_panel_session")
             .await?;
 
-    let account = staffdb::get_account_by_id(&state, &admin.actor_account_id).await?;
+    let account =
+        staffdb::get_account_by_id(&state, &admin.actor_account_id, &admin.correlation_id)
+            .await?;
     if !account.is_active || account.account_type != "staff" {
         return Err(AppError::Authorization);
     }
 
-    let permission_result = staffdb::get_effective_permissions(&state, &account.id).await?;
+    let permission_result =
+        staffdb::get_effective_permissions(&state, &account.id, &admin.correlation_id).await?;
     let now = Utc::now();
     let session = PanelSession {
         id: Uuid::new_v4().to_string(),
@@ -1013,6 +1103,10 @@ fn persist_client(state: &AppState, client: &OAuthClient) -> Result<(), AppError
     state.persist_oauth_client(client)
 }
 
+fn delete_client_record(state: &AppState, client_id: &str) -> Result<(), AppError> {
+    state.delete_oauth_client(client_id)
+}
+
 fn persist_pending_consent(state: &AppState, consent: &PendingConsent) -> Result<(), AppError> {
     state.persist_pending_consent(consent)
 }
@@ -1187,7 +1281,8 @@ async fn enforce_header_actor_permission(
         }
     };
 
-    let permission_result = staffdb::get_effective_permissions(state, &actor_id).await?;
+    let permission_result =
+        staffdb::get_effective_permissions(state, &actor_id, &correlation_id).await?;
     enforce_permission_claim(
         state,
         &actor_id,

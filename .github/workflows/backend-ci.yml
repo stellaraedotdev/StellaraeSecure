@@ -1,0 +1,42 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - 'oauth2/**'
+      - 'staffdb/**'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    paths:
+      - 'oauth2/**'
+      - 'staffdb/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [oauth2, staffdb]
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            oauth2
+            staffdb
+
+      - name: Run tests
+        run: cargo test

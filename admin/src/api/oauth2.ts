@@ -7,6 +7,7 @@ import type {
   IntrospectResponse,
   PanelSessionResponse,
   PanelSessionValidationResponse,
+  RotateClientSecretResponse,
 } from '../types/oauth2'
 
 export type AdminSignedHeaders = {
@@ -154,5 +155,32 @@ export async function revokeToken(
     method: 'POST',
     headers: withStepup(input, panelSessionId),
     body: { token },
+  })
+}
+
+export async function rotateClientSecret(
+  input: AdminSignedHeaders,
+  clientId: string,
+  panelSessionId: string,
+) {
+  const encoded = encodeURIComponent(clientId)
+  return requestJson<RotateClientSecretResponse>(
+    `${appConfig.oauth2BaseUrl}/api/admin/clients/${encoded}/secret`,
+    {
+      method: 'POST',
+      headers: withStepup(input, panelSessionId),
+    },
+  )
+}
+
+export async function deleteClient(
+  input: AdminSignedHeaders,
+  clientId: string,
+  panelSessionId: string,
+) {
+  const encoded = encodeURIComponent(clientId)
+  return requestJson<void>(`${appConfig.oauth2BaseUrl}/api/admin/clients/${encoded}`, {
+    method: 'DELETE',
+    headers: withStepup(input, panelSessionId),
   })
 }
