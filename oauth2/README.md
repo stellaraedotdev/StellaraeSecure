@@ -139,6 +139,12 @@ Client ownership model:
 - Client registration assigns ownership to `x-staff-account-id`.
 - Client details and collaborator operations require owner or collaborator membership.
 
+Persistence model:
+
+- OAuth client records, access tokens, refresh tokens, and authorization codes remain in memory for now.
+- Admin audit events and panel sessions are persisted to the SQLite database configured by `DATABASE_URL`.
+- `sqlite::memory:` is accepted for tests; file-backed SQLite URLs are also supported.
+
 Admin API namespace:
 
 - `/api/admin/clients`

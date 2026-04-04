@@ -334,6 +334,7 @@ async fn register_client(
     store.clients.insert(client_id.clone(), client);
 
     append_admin_audit_event(
+        &state,
         &mut store,
         &admin,
         "register_client",
@@ -430,6 +431,7 @@ async fn add_collaborator(
     };
 
     append_admin_audit_event(
+        &state,
         &mut store,
         &admin,
         "add_collaborator",
@@ -494,6 +496,7 @@ async fn remove_collaborator(
 
     client.collaborator_account_ids.retain(|id| id != &account_id);
     append_admin_audit_event(
+        &state,
         &mut store,
         &admin,
         "remove_collaborator",
@@ -801,6 +804,7 @@ async fn revoke(
     }
 
     append_admin_audit_event(
+        &state,
         &mut store,
         &admin,
         "revoke_token",
@@ -888,8 +892,16 @@ async fn list_admin_audit_events(
         .lock()
         .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
 
+    let mut events = state.load_admin_audit_events()?;
+    for event in store.admin_audit_events.iter() {
+        if !events.iter().any(|existing| existing.id == event.id) {
+            events.push(event.clone());
+        }
+    }
+    events.sort_by_key(|event| event.timestamp);
+
     Ok(Json(AdminAuditEventsResponse {
-        events: store.admin_audit_events.clone(),
+        events,
     }))
 }
 
@@ -923,7 +935,9 @@ async fn issue_panel_session(
     store
         .panel_sessions
         .insert(session.id.clone(), session.clone());
+    state.persist_panel_session(&session)?;
     append_admin_audit_event(
+        &state,
         &mut store,
         &admin,
         "issue_panel_session",
@@ -952,12 +966,9 @@ async fn validate_panel_session(
         require_admin_permission(&state, &headers, PERM_PANEL_SESSION_VERIFY, "validate_panel_session")
             .await?;
 
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+    let session = load_panel_session(&state, &session_id)?;
 
-    let Some(session) = store.panel_sessions.get(&session_id) else {
+    let Some(session) = session else {
         return Ok(Json(PanelSessionValidationResponse {
             active: false,
             session_id,
@@ -1043,15 +1054,7 @@ async fn validate_stepup_session_freshness(
         .and_then(|v| v.to_str().ok())
         .ok_or(AppError::Authorization)?;
 
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
-
-    let session = store
-        .panel_sessions
-        .get(session_id)
-        .ok_or(AppError::Authorization)?;
+    let session = load_panel_session(state, session_id)?.ok_or(AppError::Authorization)?;
 
     // Verify session belongs to the actor
     if session.account_id != actor_account_id {
@@ -1074,6 +1077,7 @@ async fn validate_stepup_session_freshness(
 }
 
 fn append_admin_audit_event(
+    state: &AppState,
     store: &mut crate::state::MemoryStore,
     admin: &AdminRequestContext,
     operation: &str,
@@ -1081,7 +1085,7 @@ fn append_admin_audit_event(
     target_id: &str,
     decision: &str,
 ) {
-    store.admin_audit_events.push(AdminAuditEvent {
+    let event = AdminAuditEvent {
         id: Uuid::new_v4().to_string(),
         actor_account_id: admin.actor_account_id.clone(),
         operation: operation.to_string(),
@@ -1090,7 +1094,26 @@ fn append_admin_audit_event(
         decision: decision.to_string(),
         correlation_id: admin.correlation_id.clone(),
         timestamp: Utc::now(),
-    });
+    };
+
+    store.admin_audit_events.push(event.clone());
+    let _ = state.persist_admin_audit_event(&event);
+}
+
+fn load_panel_session(
+    state: &AppState,
+    session_id: &str,
+) -> Result<Option<PanelSession>, AppError> {
+    if let Some(session) = state.load_panel_session(session_id)? {
+        return Ok(Some(session));
+    }
+
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| AppError::Internal("store lock poisoned".to_string()))?;
+
+    Ok(store.panel_sessions.get(session_id).cloned())
 }
 
 fn verified_staff_actor_id(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
@@ -1407,9 +1430,14 @@ mod tests {
 
     use super::{
         correlation_id_from_headers, enforce_permission_claim, has_client_access,
-        validate_stepup_session_freshness,
+        validate_stepup_session_freshness, ensure_client_access, assert_admin_key,
+        append_admin_audit_event,
+        load_panel_session,
+        PERM_OAUTH_CLIENT_CREATE, PERM_OAUTH_CLIENT_READ,
+        PERM_OAUTH_TOKEN_REVOKE, DECISION_ALLOW,
     };
-    use crate::models::OAuthClient;
+    use crate::models::{AdminAuditEvent, OAuthClient, PanelSession};
+    use super::AdminRequestContext;
     use chrono::Utc;
 
     fn build_state(mode: PermissionEnforcementMode) -> AppState {
@@ -1433,6 +1461,7 @@ mod tests {
             staff_identity_max_skew_seconds: 120,
             stepup_session_freshness_seconds: 300,
         })
+        .expect("test app state")
     }
 
     #[test]
@@ -1609,5 +1638,273 @@ mod tests {
 
         let result = validate_stepup_session_freshness(&state, &headers, "actor-1").await;
         assert!(result.is_err());
+    }
+
+    // =====================================================================
+    // AUTHORIZATION MATRIX TESTS (Phase 8)
+    // =====================================================================
+    // Verify each permission key enforces intended operations correctly
+
+    #[test]
+    fn permission_matrix_enforce_mode_denies_all_missing_perms() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let no_perms: Vec<String> = Vec::new();
+
+        let result = enforce_permission_claim(
+            &state,
+            "actor-1",
+            &no_perms,
+            PERM_OAUTH_CLIENT_CREATE,
+            "register_client",
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn permission_matrix_enforce_mode_grants_with_permission() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let has_permission = vec![PERM_OAUTH_CLIENT_CREATE.to_string()];
+
+        let result = enforce_permission_claim(
+            &state,
+            "actor-1",
+            &has_permission,
+            PERM_OAUTH_CLIENT_CREATE,
+            "register_client",
+            None,
+        );
+        assert!(result.is_ok());
+
+        let result = enforce_permission_claim(
+            &state,
+            "actor-1",
+            &has_permission,
+            PERM_OAUTH_TOKEN_REVOKE,
+            "revoke",
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    // =====================================================================
+    // E2E WORKFLOW TESTS
+    // =====================================================================
+
+    #[test]
+    fn e2e_client_ownership_enforcement() {
+        let owner_id = "owner-1";
+        let collab_id = "collab-1";
+        let other_id = "other-1";
+
+        let client = OAuthClient {
+            client_id: "app-1".to_string(),
+            client_secret_hash: "hash".to_string(),
+            name: "Test App".to_string(),
+            redirect_uris: vec!["https://example.test/callback".to_string()],
+            allowed_scopes: vec!["openid".to_string()],
+            audience: "public".to_string(),
+            owner_account_id: owner_id.to_string(),
+            collaborator_account_ids: vec![collab_id.to_string()],
+            created_at: Utc::now(),
+        };
+
+        assert!(has_client_access(owner_id, &client));
+        assert!(ensure_client_access(owner_id, &client).is_ok());
+
+        assert!(has_client_access(collab_id, &client));
+        assert!(ensure_client_access(collab_id, &client).is_ok());
+
+        assert!(!has_client_access(other_id, &client));
+        assert!(ensure_client_access(other_id, &client).is_err());
+    }
+
+    #[test]
+    fn e2e_admin_audit_event_emission() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let mut store = state.store.lock().unwrap();
+
+        assert_eq!(store.admin_audit_events.len(), 0);
+
+        let admin_ctx = AdminRequestContext {
+            actor_account_id: "admin-1".to_string(),
+            correlation_id: "corr-123".to_string(),
+        };
+
+        append_admin_audit_event(
+            &state,
+            &mut store,
+            &admin_ctx,
+            "register_client",
+            "oauth_client",
+            "client-1",
+            DECISION_ALLOW,
+        );
+
+        assert_eq!(store.admin_audit_events.len(), 1);
+        let event = &store.admin_audit_events[0];
+        assert_eq!(event.actor_account_id, "admin-1");
+        assert_eq!(event.operation, "register_client");
+        assert_eq!(event.target_type, "oauth_client");
+        assert_eq!(event.target_id, "client-1");
+        assert_eq!(event.decision, DECISION_ALLOW);
+        assert_eq!(event.correlation_id, "corr-123");
+    }
+
+    #[test]
+    fn database_persists_admin_audit_events() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let event = AdminAuditEvent {
+            id: "event-1".to_string(),
+            actor_account_id: "admin-1".to_string(),
+            operation: "revoke_token".to_string(),
+            target_type: "token".to_string(),
+            target_id: "token-1".to_string(),
+            decision: DECISION_ALLOW.to_string(),
+            correlation_id: "corr-456".to_string(),
+            timestamp: Utc::now(),
+        };
+
+        state.persist_admin_audit_event(&event).expect("persist audit event");
+
+        let events = state.load_admin_audit_events().expect("load audit events");
+        assert!(events.iter().any(|loaded| loaded.id == "event-1"));
+    }
+
+    #[test]
+    fn database_persists_panel_sessions() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let session = PanelSession {
+            id: "session-db-1".to_string(),
+            account_id: "actor-1".to_string(),
+            permissions: vec![PERM_OAUTH_TOKEN_REVOKE.to_string()],
+            issued_at: Utc::now(),
+            expires_at: Utc::now() + chrono::Duration::minutes(10),
+        };
+
+        state
+            .persist_panel_session(&session)
+            .expect("persist panel session");
+
+        let loaded = load_panel_session(&state, &session.id)
+            .expect("load panel session")
+            .expect("panel session exists");
+
+        assert_eq!(loaded.id, session.id);
+        assert_eq!(loaded.account_id, session.account_id);
+        assert_eq!(loaded.permissions, session.permissions);
+    }
+
+    // =====================================================================
+    // PRIVILEGE ESCALATION RESISTANCE TESTS
+    // =====================================================================
+
+    #[test]
+    fn privilege_escalation_denied_without_permission() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let unprivileged_perms: Vec<String> = Vec::new();
+
+        let result = enforce_permission_claim(
+            &state,
+            "unprivileged",
+            &unprivileged_perms,
+            PERM_OAUTH_TOKEN_REVOKE,
+            "revoke",
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn privilege_escalation_permission_mismatch() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let partial_perms = vec![PERM_OAUTH_CLIENT_READ.to_string()];
+
+        let result = enforce_permission_claim(
+            &state,
+            "actor-1",
+            &partial_perms,
+            PERM_OAUTH_CLIENT_CREATE,
+            "register_client",
+            None,
+        );
+        assert!(result.is_err());
+
+        let result = enforce_permission_claim(
+            &state,
+            "actor-1",
+            &partial_perms,
+            PERM_OAUTH_CLIENT_READ,
+            "get_client",
+            None,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn privilege_escalation_missing_admin_key() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let headers = HeaderMap::new();
+
+        let result = assert_admin_key(&state, &headers);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn privilege_escalation_wrong_admin_key() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-admin-key", HeaderValue::from_static("wrong-key"));
+
+        let result = assert_admin_key(&state, &headers);
+        assert!(result.is_err());
+    }
+
+    // =====================================================================
+    // NEGATIVE TESTS
+    // =====================================================================
+
+    #[test]
+    fn negative_test_client_not_found() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let store = state.store.lock().unwrap();
+
+        let result = store.clients.get("nonexistent");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn negative_test_permission_empty_list() {
+        let state = build_state(PermissionEnforcementMode::Enforce);
+        let empty_perms: Vec<String> = Vec::new();
+
+        for perm_key in &[
+            PERM_OAUTH_CLIENT_CREATE,
+            PERM_OAUTH_CLIENT_READ,
+            PERM_OAUTH_TOKEN_REVOKE,
+        ] {
+            let result = enforce_permission_claim(
+                &state,
+                "actor-1",
+                &empty_perms,
+                perm_key,
+                "op",
+                None,
+            );
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn negative_test_correlation_id_generation() {
+        let empty_headers = HeaderMap::new();
+
+        let corr_id = correlation_id_from_headers(&empty_headers);
+        assert!(!corr_id.is_empty());
+
+        assert!(uuid::Uuid::parse_str(&corr_id).is_ok());
+
+        let corr_id2 = correlation_id_from_headers(&empty_headers);
+        assert_ne!(corr_id, corr_id2);
     }
 }

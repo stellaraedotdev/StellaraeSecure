@@ -16,6 +16,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     create_rbac_role_permissions_table(pool).await?;
     create_rbac_account_roles_table(pool).await?;
     seed_system_rbac_roles(pool).await?;
+    seed_oauth2_permissions(pool).await?;
 
     tracing::info!("Migrations completed successfully");
     Ok(())
@@ -255,5 +256,40 @@ async fn seed_system_rbac_roles(pool: &SqlitePool) -> Result<()> {
     }
 
     tracing::info!("RBAC system role seeds created/verified");
+    Ok(())
+}
+
+/// Seed OAuth2-related permission keys from oauth2 service
+async fn seed_oauth2_permissions(pool: &SqlitePool) -> Result<()> {
+    let oauth2_permissions = vec![
+        ("oauth.client.create", "Create new OAuth2 client applications"),
+        ("oauth.client.read", "Read OAuth2 client metadata"),
+        ("oauth.client.secret.rotate", "Rotate client secrets (high-risk)"),
+        ("oauth.client.delete", "Delete OAuth2 client applications (high-risk)"),
+        ("oauth.client.collaborator.manage", "Manage client collaborators (high-risk)"),
+        ("oauth.token.revoke", "Revoke access tokens (high-risk)"),
+        ("oauth.token.introspect", "Introspect token metadata"),
+        ("oauth.staff.authorize", "Authorize staff OAuth flows"),
+        ("panel.audit.read", "Read admin audit events"),
+        ("panel.session.issue", "Issue panel sessions"),
+        ("panel.session.verify", "Validate panel sessions"),
+    ];
+
+    for (permission_key, description) in oauth2_permissions {
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO rbac_permissions (id, permission_key, description, created_at)
+            VALUES (?, ?, ?, ?)
+            "#,
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(permission_key)
+        .bind(description)
+        .bind(chrono::Utc::now())
+        .execute(pool)
+        .await?;
+    }
+
+    tracing::info!("OAuth2 permission keys seeded/verified");
     Ok(())
 }
