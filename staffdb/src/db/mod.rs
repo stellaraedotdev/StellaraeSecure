@@ -9,8 +9,10 @@ pub use pool::{create_pool, health_check, DbPool};
 pub use repository::{
 	AccountRepository,
 	AuditLogRepository,
+	RbacRepository,
 	RoleRepository,
 	SqliteAccountRepository,
 	SqliteAuditLogRepository,
+	SqliteRbacRepository,
 	SqliteRoleRepository,
 };

@@ -11,6 +11,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     create_accounts_table(pool).await?;
     create_account_roles_table(pool).await?;
     create_audit_log_table(pool).await?;
+    create_rbac_roles_table(pool).await?;
+    create_rbac_permissions_table(pool).await?;
+    create_rbac_role_permissions_table(pool).await?;
+    create_rbac_account_roles_table(pool).await?;
+    seed_system_rbac_roles(pool).await?;
 
     tracing::info!("Migrations completed successfully");
     Ok(())
@@ -108,5 +113,147 @@ async fn create_audit_log_table(pool: &SqlitePool) -> Result<()> {
         .await?;
 
     tracing::info!("Audit log table created/verified");
+    Ok(())
+}
+
+/// Create rbac_roles table
+async fn create_rbac_roles_table(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS rbac_roles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            is_system BOOLEAN NOT NULL DEFAULT false,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_rbac_roles_name ON rbac_roles(name)")
+        .execute(pool)
+        .await?;
+
+    tracing::info!("RBAC roles table created/verified");
+    Ok(())
+}
+
+/// Create rbac_permissions table
+async fn create_rbac_permissions_table(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS rbac_permissions (
+            id TEXT PRIMARY KEY,
+            permission_key TEXT NOT NULL UNIQUE,
+            description TEXT,
+            created_at DATETIME NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_rbac_permissions_key ON rbac_permissions(permission_key)",
+    )
+    .execute(pool)
+    .await?;
+
+    tracing::info!("RBAC permissions table created/verified");
+    Ok(())
+}
+
+/// Create rbac_role_permissions mapping table
+async fn create_rbac_role_permissions_table(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS rbac_role_permissions (
+            role_id TEXT NOT NULL,
+            permission_id TEXT NOT NULL,
+            granted_at DATETIME NOT NULL,
+            PRIMARY KEY (role_id, permission_id),
+            FOREIGN KEY (role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE,
+            FOREIGN KEY (permission_id) REFERENCES rbac_permissions(id) ON DELETE CASCADE
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_rbac_role_permissions_role ON rbac_role_permissions(role_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_rbac_role_permissions_permission ON rbac_role_permissions(permission_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    tracing::info!("RBAC role-permission mapping table created/verified");
+    Ok(())
+}
+
+/// Create rbac_account_roles mapping table
+async fn create_rbac_account_roles_table(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS rbac_account_roles (
+            id TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            role_id TEXT NOT NULL,
+            granted_by TEXT,
+            granted_at DATETIME NOT NULL,
+            FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+            FOREIGN KEY (role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE,
+            UNIQUE(account_id, role_id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_rbac_account_roles_account ON rbac_account_roles(account_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_rbac_account_roles_role ON rbac_account_roles(role_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    tracing::info!("RBAC account-role mapping table created/verified");
+    Ok(())
+}
+
+/// Seed immutable baseline RBAC roles
+async fn seed_system_rbac_roles(pool: &SqlitePool) -> Result<()> {
+    let now = chrono::Utc::now();
+
+    for role_name in ["super_admin", "security_admin", "support_readonly"] {
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO rbac_roles (id, name, description, is_system, created_at, updated_at)
+            VALUES (?, ?, ?, true, ?, ?)
+            "#,
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(role_name)
+        .bind(format!("System role: {}", role_name))
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+    }
+
+    tracing::info!("RBAC system role seeds created/verified");
     Ok(())
 }

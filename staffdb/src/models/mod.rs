@@ -46,6 +46,65 @@ pub struct Role {
     pub granted_at: DateTime<Utc>,
 }
 
+/// RbacRole represents a reusable RBAC role definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RbacRole {
+    /// Unique role identifier
+    pub id: String,
+
+    /// Unique role name (for example: super_admin)
+    pub name: String,
+
+    /// Optional human-readable description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// True if this is a system-managed immutable role
+    pub is_system: bool,
+
+    /// Creation timestamp (UTC)
+    pub created_at: DateTime<Utc>,
+
+    /// Last update timestamp (UTC)
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Permission represents an action key grantable via RBAC roles
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Permission {
+    /// Unique permission identifier
+    pub id: String,
+
+    /// Permission key (for example: oauth.client.create)
+    pub permission_key: String,
+
+    /// Optional human-readable description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Creation timestamp (UTC)
+    pub created_at: DateTime<Utc>,
+}
+
+/// RolePermission mapping between a role and permission
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RolePermission {
+    pub role_id: String,
+    pub permission_id: String,
+    pub granted_at: DateTime<Utc>,
+}
+
+/// AccountRoleAssignment links an account to an RBAC role
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountRoleAssignment {
+    pub id: String,
+    pub account_id: String,
+    pub role_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_by: Option<String>,
+    pub granted_at: DateTime<Utc>,
+}
+
 /// AuditEvent represents an immutable log entry for account changes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEvent {
@@ -90,6 +149,33 @@ pub struct UpdateAccountRequest {
 #[derive(Debug, Deserialize)]
 pub struct GrantRoleRequest {
     pub role: String, // 'admin', 'staff', or 'user'
+}
+
+/// Request to create a custom RBAC role
+#[derive(Debug, Deserialize)]
+pub struct CreateRbacRoleRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub is_system: Option<bool>,
+}
+
+/// Request to create a permission key
+#[derive(Debug, Deserialize)]
+pub struct CreatePermissionRequest {
+    pub permission_key: String,
+    pub description: Option<String>,
+}
+
+/// Request to assign a permission to a role
+#[derive(Debug, Deserialize)]
+pub struct AssignPermissionToRoleRequest {
+    pub permission_id: String,
+}
+
+/// Request to assign a role to an account
+#[derive(Debug, Deserialize)]
+pub struct AssignRoleToAccountRequest {
+    pub role_id: String,
 }
 
 /// Standard API response wrapper

@@ -35,6 +35,35 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         
         // Audit endpoints
         .route("/audit/accounts/:id", get(handlers::audit::get_audit_log))
+
+        // RBAC endpoints
+        .route(
+            "/rbac/roles",
+            post(handlers::rbac::create_role)
+                .get(handlers::rbac::list_roles),
+        )
+        .route(
+            "/rbac/permissions",
+            post(handlers::rbac::create_permission)
+                .get(handlers::rbac::list_permissions),
+        )
+        .route(
+            "/rbac/roles/:role_id/permissions",
+            post(handlers::rbac::assign_permission_to_role),
+        )
+        .route(
+            "/rbac/accounts/:account_id/roles",
+            post(handlers::rbac::assign_role_to_account)
+                .get(handlers::rbac::list_account_roles),
+        )
+        .route(
+            "/rbac/accounts/:account_id/roles/:role_id",
+            delete(handlers::rbac::revoke_role_from_account),
+        )
+        .route(
+            "/rbac/accounts/:account_id/permissions/effective",
+            get(handlers::rbac::get_effective_permissions),
+        )
         
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
