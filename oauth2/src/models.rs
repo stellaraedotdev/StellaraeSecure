@@ -21,6 +21,7 @@ pub struct PendingConsent {
     pub scope: Vec<String>,
     pub account_id: String,
     pub account_type: String,
+    pub effective_permissions: Vec<String>,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -30,6 +31,7 @@ pub struct AuthorizationCode {
     pub client_id: String,
     pub account_id: String,
     pub scope: Vec<String>,
+    pub effective_permissions: Vec<String>,
     pub redirect_uri: String,
     pub expires_at: DateTime<Utc>,
 }
@@ -40,6 +42,7 @@ pub struct AccessToken {
     pub client_id: String,
     pub account_id: String,
     pub scope: Vec<String>,
+    pub effective_permissions: Vec<String>,
     pub expires_at: DateTime<Utc>,
     pub revoked: bool,
 }
@@ -50,6 +53,7 @@ pub struct RefreshToken {
     pub client_id: String,
     pub account_id: String,
     pub scope: Vec<String>,
+    pub effective_permissions: Vec<String>,
     pub expires_at: DateTime<Utc>,
     pub revoked: bool,
 }

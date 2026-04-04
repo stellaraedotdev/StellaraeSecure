@@ -76,6 +76,7 @@ struct AuthorizePendingResponse {
     client_id: String,
     account_id: String,
     account_type: String,
+    effective_permissions: Vec<String>,
     requested_scope: Vec<String>,
     expires_at: String,
 }
@@ -109,6 +110,7 @@ struct TokenResponse {
     expires_in: i64,
     refresh_token: String,
     scope: String,
+    permissions: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -127,6 +129,7 @@ struct IntrospectResponse {
     client_id: Option<String>,
     sub: Option<String>,
     scope: Option<String>,
+    permissions: Option<Vec<String>>,
     exp: Option<i64>,
     token_type: Option<&'static str>,
 }
@@ -285,12 +288,20 @@ async fn authorize(
         ));
     }
 
-    let account = staffdb::lookup_account(&state, query.username.as_deref(), query.email.as_deref()).await?;
+    let account =
+        staffdb::lookup_account(&state, query.username.as_deref(), query.email.as_deref()).await?;
     if !account.is_active {
         return Err(AppError::Authorization);
     }
+
+    let mut effective_permissions = Vec::new();
     if client.audience == "staff" && account.account_type != "staff" {
         return Err(AppError::Authorization);
+    }
+    if client.audience == "staff" {
+        let permission_result =
+            staffdb::get_effective_permissions(&state, &account.id).await?;
+        effective_permissions = permission_result.permissions;
     }
 
     let pending = PendingConsent {
@@ -301,6 +312,7 @@ async fn authorize(
         scope: requested_scope,
         account_id: account.id,
         account_type: account.account_type,
+        effective_permissions: effective_permissions.clone(),
         expires_at: now_plus_seconds(state.config.auth_code_ttl_seconds),
     };
 
@@ -309,6 +321,7 @@ async fn authorize(
         client_id: pending.client_id.clone(),
         account_id: pending.account_id.clone(),
         account_type: pending.account_type.clone(),
+        effective_permissions: pending.effective_permissions.clone(),
         requested_scope: pending.scope.clone(),
         expires_at: pending.expires_at.to_rfc3339(),
     };
@@ -361,6 +374,7 @@ async fn consent(
         client_id: pending.client_id.clone(),
         account_id: pending.account_id,
         scope: pending.scope,
+        effective_permissions: pending.effective_permissions,
         redirect_uri: pending.redirect_uri.clone(),
         expires_at: now_plus_seconds(state.config.auth_code_ttl_seconds),
     };
@@ -415,8 +429,20 @@ async fn token(
             return Err(AppError::Authentication);
         }
 
-        let access_token = issue_access_token(&state, &auth_code.client_id, &auth_code.account_id, &auth_code.scope)?;
-        let refresh_token = issue_refresh_token(&state, &auth_code.client_id, &auth_code.account_id, &auth_code.scope)?;
+        let access_token = issue_access_token(
+            &state,
+            &auth_code.client_id,
+            &auth_code.account_id,
+            &auth_code.scope,
+            &auth_code.effective_permissions,
+        )?;
+        let refresh_token = issue_refresh_token(
+            &state,
+            &auth_code.client_id,
+            &auth_code.account_id,
+            &auth_code.scope,
+            &auth_code.effective_permissions,
+        )?;
 
         return Ok(Json(TokenResponse {
             access_token,
@@ -424,6 +450,7 @@ async fn token(
             expires_in: state.config.access_token_ttl_seconds,
             refresh_token,
             scope: auth_code.scope.join(" "),
+            permissions: auth_code.effective_permissions,
         }));
     }
 
@@ -452,8 +479,20 @@ async fn token(
             token
         };
 
-        let access_token = issue_access_token(&state, &refresh_data.client_id, &refresh_data.account_id, &refresh_data.scope)?;
-        let new_refresh_token = issue_refresh_token(&state, &refresh_data.client_id, &refresh_data.account_id, &refresh_data.scope)?;
+        let access_token = issue_access_token(
+            &state,
+            &refresh_data.client_id,
+            &refresh_data.account_id,
+            &refresh_data.scope,
+            &refresh_data.effective_permissions,
+        )?;
+        let new_refresh_token = issue_refresh_token(
+            &state,
+            &refresh_data.client_id,
+            &refresh_data.account_id,
+            &refresh_data.scope,
+            &refresh_data.effective_permissions,
+        )?;
 
         return Ok(Json(TokenResponse {
             access_token,
@@ -461,6 +500,7 @@ async fn token(
             expires_in: state.config.access_token_ttl_seconds,
             refresh_token: new_refresh_token,
             scope: refresh_data.scope.join(" "),
+            permissions: refresh_data.effective_permissions,
         }));
     }
 
@@ -508,6 +548,11 @@ async fn introspect(
             client_id: if active { Some(token.client_id.clone()) } else { None },
             sub: if active { Some(token.account_id.clone()) } else { None },
             scope: if active { Some(token.scope.join(" ")) } else { None },
+            permissions: if active {
+                Some(token.effective_permissions.clone())
+            } else {
+                None
+            },
             exp: if active { Some(token.expires_at.timestamp()) } else { None },
             token_type: if active { Some("access_token") } else { None },
         }));
@@ -520,6 +565,11 @@ async fn introspect(
             client_id: if active { Some(token.client_id.clone()) } else { None },
             sub: if active { Some(token.account_id.clone()) } else { None },
             scope: if active { Some(token.scope.join(" ")) } else { None },
+            permissions: if active {
+                Some(token.effective_permissions.clone())
+            } else {
+                None
+            },
             exp: if active { Some(token.expires_at.timestamp()) } else { None },
             token_type: if active { Some("refresh_token") } else { None },
         }));
@@ -530,6 +580,7 @@ async fn introspect(
         client_id: None,
         sub: None,
         scope: None,
+        permissions: None,
         exp: None,
         token_type: None,
     }))
@@ -575,6 +626,7 @@ fn issue_access_token(
     client_id: &str,
     account_id: &str,
     scope: &[String],
+    effective_permissions: &[String],
 ) -> Result<String, AppError> {
     let token = generate_secret(64);
     let token_data = AccessToken {
@@ -582,6 +634,7 @@ fn issue_access_token(
         client_id: client_id.to_string(),
         account_id: account_id.to_string(),
         scope: scope.to_vec(),
+        effective_permissions: effective_permissions.to_vec(),
         expires_at: now_plus_seconds(state.config.access_token_ttl_seconds),
         revoked: false,
     };
@@ -600,6 +653,7 @@ fn issue_refresh_token(
     client_id: &str,
     account_id: &str,
     scope: &[String],
+    effective_permissions: &[String],
 ) -> Result<String, AppError> {
     let token = generate_secret(72);
     let token_data = RefreshToken {
@@ -607,6 +661,7 @@ fn issue_refresh_token(
         client_id: client_id.to_string(),
         account_id: account_id.to_string(),
         scope: scope.to_vec(),
+        effective_permissions: effective_permissions.to_vec(),
         expires_at: now_plus_seconds(state.config.refresh_token_ttl_seconds),
         revoked: false,
     };
