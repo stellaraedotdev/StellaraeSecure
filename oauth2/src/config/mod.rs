@@ -86,6 +86,17 @@ impl Config {
         let staffdb_base_url = env::var("STAFFDB_BASE_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
 
+        // Validate HTTPS in non-development environments
+        if !environment.eq_ignore_ascii_case("development") && !staffdb_base_url.starts_with("https://") {
+            return Err(ConfigError::InvalidVar {
+                name: "STAFFDB_BASE_URL",
+                value: format!(
+                    "{}. Must use HTTPS (https://) in {} environment",
+                    staffdb_base_url, environment
+                ),
+            });
+        }
+
         let staffdb_api_key = env::var("STAFFDB_API_KEY")
             .map_err(|_| ConfigError::MissingVar("STAFFDB_API_KEY"))?;
 

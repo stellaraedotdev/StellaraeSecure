@@ -1,5 +1,7 @@
 name: OpenAPI CI
 
+permissions:
+  contents: read
 on:
   pull_request:
     paths:
@@ -15,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1e60f620b9541d910f346b94b622ae0e60eeae34
         with:
           node-version: '20'
 

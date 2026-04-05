@@ -178,6 +178,25 @@ fn assert_api_key(state: &AppState, headers: &HeaderMap) -> Result<(), AppError>
     Ok(())
 }
 
+/// Validates that the staffdb base URL uses HTTPS, with an explicit
+/// loopback exception for http://127.0.0.1.
+fn validate_secure_staffdb_url(base_url: &str) -> Result<(), AppError> {
+    let parsed = reqwest::Url::parse(base_url)
+        .map_err(|_| AppError::Internal("Invalid staffdb base URL".to_string()))?;
+
+    let is_https = parsed.scheme() == "https";
+    let is_allowed_dev_http = parsed.scheme() == "http"
+        && matches!(parsed.host_str(), Some("127.0.0.1") | Some("staffdb"));
+
+    if !is_https && !is_allowed_dev_http {
+        return Err(AppError::Internal(
+            "Insecure transport to staffdb: must use HTTPS, http://127.0.0.1, or http://staffdb"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 async fn ensure_account_exists(state: &AppState, account_id: &str) -> Result<(), AppError> {
     if Uuid::parse_str(account_id).is_err() {
         return Err(AppError::Validation("Invalid account ID format".to_string()));
@@ -189,6 +208,8 @@ async fn ensure_account_exists(state: &AppState, account_id: &str) -> Result<(),
     let Some(staffdb_api_key) = state.config.staffdb_api_key.as_deref() else {
         return Ok(());
     };
+
+    validate_secure_staffdb_url(staffdb_base_url)?;
 
     let url = format!(
         "{}/api/accounts/{}",
@@ -607,7 +628,8 @@ fn normalize_sqlite_url(database_url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        expected_hsk_assertion, normalize_sqlite_url, verify_hsk_assertion, verify_totp_code,
+        expected_hsk_assertion, normalize_sqlite_url, validate_secure_staffdb_url,
+        verify_hsk_assertion, verify_totp_code,
     };
 
     #[test]
@@ -641,6 +663,26 @@ mod tests {
     fn totp_verification_rejects_invalid_secret_encoding() {
         let err = verify_totp_code("!not-base32!", "123456", 59).expect_err("invalid secret");
         assert!(err.to_string().contains("Invalid TOTP secret encoding"));
+    }
+
+    #[test]
+    fn validate_secure_staffdb_url_enforces_transport_security() {
+        // HTTPS is always allowed
+        assert!(validate_secure_staffdb_url("https://staffdb.example.com").is_ok());
+        assert!(validate_secure_staffdb_url("https://staffdb.example.com/api").is_ok());
+
+        // HTTP loopback (127.0.0.1) and local compose hostnames are allowed as explicit exceptions
+        assert!(validate_secure_staffdb_url("http://127.0.0.1:3000").is_ok());
+        assert!(validate_secure_staffdb_url("http://127.0.0.1/api/accounts").is_ok());
+        assert!(validate_secure_staffdb_url("http://staffdb:3000").is_ok());
+        assert!(validate_secure_staffdb_url("http://staffdb:3000/api/accounts").is_ok());
+
+        // Plain HTTP to non-local hosts is rejected
+        assert!(validate_secure_staffdb_url("http://example.com").is_err());
+        assert!(validate_secure_staffdb_url("ftp://staffdb.example.com").is_err());
+
+        // Crafted URLs that start with "127.0.0.1" in path or subdomain are rejected
+        assert!(validate_secure_staffdb_url("http://127.0.0.1.evil.com").is_err());
     }
 }
 

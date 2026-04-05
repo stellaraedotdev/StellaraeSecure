@@ -34,6 +34,7 @@ pub struct MemoryStore {
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
+    pub staffdb_base_url: reqwest::Url,
     pub store: Arc<Mutex<MemoryStore>>,
     pub db: Arc<Mutex<Connection>>,
     pub http_client: reqwest::Client,
@@ -41,6 +42,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Config) -> Result<Self, AppError> {
+        crate::staffdb::validate_secure_url(&config.staffdb_base_url, &config.environment)?;
+        let staffdb_base_url = reqwest::Url::parse(&config.staffdb_base_url)
+            .map_err(|_| AppError::Config("STAFFDB_BASE_URL is not a valid URL".to_string()))?;
+
         let database_url = normalize_sqlite_url(&config.database_url);
         let connection = Connection::open(database_url)
             .map_err(|error| AppError::Config(format!("failed to open oauth2 database: {error}")))?;
@@ -48,6 +53,7 @@ impl AppState {
 
         Ok(Self {
             config,
+            staffdb_base_url,
             store: Arc::new(Mutex::new(MemoryStore::default())),
             db: Arc::new(Mutex::new(connection)),
             http_client: reqwest::Client::new(),

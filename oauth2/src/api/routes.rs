@@ -1512,7 +1512,7 @@ mod tests {
         AppState::new(Config {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 4000,
-            environment: "test".to_string(),
+            environment: "development".to_string(),
             service_id: "oauth2-test".to_string(),
             log_level: "info".to_string(),
             database_url: "sqlite::memory:".to_string(),

@@ -50,6 +50,7 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "sqlite:twofa.sqlite".to_string());
 
+        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
         let service_id = env::var("SERVICE_ID").unwrap_or_else(|_| "twofa-dev".to_string());
         let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
 
@@ -58,6 +59,37 @@ impl Config {
 
         let staffdb_base_url = optional_non_empty("STAFFDB_BASE_URL");
         let staffdb_api_key = optional_non_empty("STAFFDB_API_KEY");
+
+        // Validate staffdb transport: HTTPS everywhere, with explicit HTTP exceptions in development.
+        if let Some(ref url) = staffdb_base_url {
+            let parsed = reqwest::Url::parse(url).map_err(|_| ConfigError::InvalidVar {
+                name: "STAFFDB_BASE_URL",
+                value: "must be a valid URL".to_string(),
+            })?;
+
+            let is_https = parsed.scheme() == "https";
+            let is_development = environment.eq_ignore_ascii_case("development");
+            let is_allowed_dev_http = parsed.scheme() == "http"
+                && is_development
+                && matches!(
+                    parsed.host_str(),
+                    Some("staffdb")
+                        | Some("localhost")
+                        | Some("127.0.0.1")
+                        | Some("::1")
+                        | Some("[::1]")
+                        | Some("host.docker.internal")
+                );
+
+            if !is_https && !is_allowed_dev_http {
+                return Err(ConfigError::InvalidVar {
+                    name: "STAFFDB_BASE_URL",
+                    value:
+                        "Must use HTTPS, or in development use HTTP with staffdb/localhost/127.0.0.1/[::1]/host.docker.internal"
+                            .to_string(),
+                });
+            }
+        }
 
         Ok(Self {
             host,

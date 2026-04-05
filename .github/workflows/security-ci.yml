@@ -1,5 +1,8 @@
 name: Security CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
@@ -20,6 +23,8 @@ on:
 
 jobs:
   cargo-audit:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -42,10 +47,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e645b0cf01249a4b0404e0248fbf6b432f092ad3
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -57,10 +62,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Trivy filesystem security scan
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@6e7b7d1feac6b6d0511ae5a28ed1e954671674c7
         with:
           scan-type: 'fs'
           scan-ref: '.'
