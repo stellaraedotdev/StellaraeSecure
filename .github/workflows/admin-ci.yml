@@ -10,6 +10,9 @@ on:
       - 'admin/**'
       - '.github/workflows/admin-ci.yml'
 
+permissions:
+  contents: read
+
 jobs:
   admin-quality:
     runs-on: ubuntu-latest
