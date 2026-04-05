@@ -1,6 +1,10 @@
 # Global .gitignore file for the StellaraeSecure repo,
 # See others in their respecive sub-project directories
+
+# Internal confidential files and directories
 STELLARAE/
+INTERNAL/
+
 *.log
 
 # IDE files

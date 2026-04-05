@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Get started with StellaraeSecure in local and staged environments." />
+    <meta property="og:title" content="StellaraeSecure Docs | Getting Started" />
+    <meta property="og:description" content="Boot the StellaraeSecure stack and verify service health quickly." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://secure.stellarae.org/docs/getting-started.html" />
+    <meta name="twitter:card" content="summary" />
+    <title>Getting Started | StellaraeSecure Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="brand">StellaraeSecure</div>
+      <nav class="top-nav" aria-label="Docs navigation">
+        <a class="header-link" href="./index.html">Home</a>
+        <a class="header-link active" href="./getting-started.html">Getting Started</a>
+        <a class="header-link" href="./self-hosting.html">Self-Hosting</a>
+        <a class="header-link" href="./api.html">API</a>
+        <a class="header-link" href="./security-model.html">Security Model</a>
+      </nav>
+      <a
+        class="header-link"
+        href="https://github.com/stellarae/StellaraeSecure"
+        target="_blank"
+        rel="noreferrer"
+        >Repository</a
+      >
+    </header>
+
+    <main>
+      <section class="docs-shell">
+        <p class="eyebrow">Docs</p>
+        <h1>Getting Started</h1>
+        <p>
+          StellaraeSecure is free and open-source under the MIT License. Start by running the
+          integrated stack locally and validating service health endpoints.
+        </p>
+
+        <h2>Prerequisites</h2>
+        <ul>
+          <li>Docker with Compose plugin</li>
+          <li>Git and a local clone of this repository</li>
+          <li>Node.js and Rust only if you want local non-container builds</li>
+        </ul>
+
+        <h2>1. Configure environment</h2>
+        <p>Copy the compose template and set keys/secrets for your environment.</p>
+        <pre><code>cp .env.compose.example .env.compose</code></pre>
+
+        <h2>2. Start stack</h2>
+        <pre><code>docker compose --env-file .env.compose up -d --build</code></pre>
+
+        <h2>3. Verify health</h2>
+        <pre><code>curl http://127.0.0.1:3000/healthz
+curl http://127.0.0.1:4000/healthz
+curl http://127.0.0.1:8080/healthz</code></pre>
+
+        <h2>Create your first account</h2>
+        <p>
+          Use the hosted signup flow:
+          <a class="inline-link" href="https://secure.stellarae.org/signup">secure.stellarae.org/signup</a>
+        </p>
+
+        <h2>Next</h2>
+        <p>
+          Continue to <a class="inline-link" href="./self-hosting.html">Self-Hosting</a> for
+          architecture-specific deployment guidance.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Copyright 2026 Stellarae. Open-source under the MIT License.</p>
+    </footer>
+  </body>
+</html>

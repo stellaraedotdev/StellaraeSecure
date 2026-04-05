@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Self-host StellaraeSecure with architecture-aware deployment options." />
+    <meta property="og:title" content="StellaraeSecure Docs | Self-Hosting" />
+    <meta property="og:description" content="Deploy on ARM testbeds and AMD64 production with multi-arch workflows." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://secure.stellarae.org/docs/self-hosting.html" />
+    <meta name="twitter:card" content="summary" />
+    <title>Self-Hosting | StellaraeSecure Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="brand">StellaraeSecure</div>
+      <nav class="top-nav" aria-label="Docs navigation">
+        <a class="header-link" href="./index.html">Home</a>
+        <a class="header-link" href="./getting-started.html">Getting Started</a>
+        <a class="header-link active" href="./self-hosting.html">Self-Hosting</a>
+        <a class="header-link" href="./api.html">API</a>
+        <a class="header-link" href="./security-model.html">Security Model</a>
+      </nav>
+      <a
+        class="header-link"
+        href="https://github.com/stellarae/StellaraeSecure"
+        target="_blank"
+        rel="noreferrer"
+        >Repository</a
+      >
+    </header>
+
+    <main>
+      <section class="docs-shell">
+        <p class="eyebrow">Docs</p>
+        <h1>Self-Hosting</h1>
+        <p>
+          Deploy with containers and architecture-aware settings. Use ARM or RISC for test hardware,
+          then move production to AMD64/x86_64.
+        </p>
+
+        <h2>Default compose profile</h2>
+        <pre><code>docker compose --env-file .env.compose up -d --build</code></pre>
+
+        <h2>Force ARM test profile</h2>
+        <pre><code>STELLARAE_DOCKER_PLATFORM=linux/arm64 \
+  docker compose --env-file .env.compose up -d --build</code></pre>
+
+        <h2>Production simulation (AMD64)</h2>
+        <pre><code>docker compose --env-file .env.compose \
+  -f docker-compose.yml -f docker-compose.prod.yml \
+  up -d --build</code></pre>
+
+        <h2>Multi-arch image publishing</h2>
+        <pre><code>docker buildx build --platform linux/amd64,linux/arm64 \
+  -f staffdb/Dockerfile -t ghcr.io/&lt;org&gt;/stellarae-staffdb:latest staffdb --push
+
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f oauth2/Dockerfile -t ghcr.io/&lt;org&gt;/stellarae-oauth2:latest oauth2 --push
+
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f admin/Dockerfile -t ghcr.io/&lt;org&gt;/stellarae-admin:latest admin --push</code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>Copyright 2026 Stellarae. Open-source under the MIT License.</p>
+    </footer>
+  </body>
+</html>

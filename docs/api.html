@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Complete API reference for StellaraeSecure including endpoint methods, headers, body schemas, and response types."
+    />
+    <meta property="og:title" content="StellaraeSecure Docs | API Reference" />
+    <meta
+      property="og:description"
+      content="Reference-grade API documentation for staffdb and oauth2 with auth requirements and payload schemas."
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://secure.stellarae.org/docs/api.html" />
+    <meta name="twitter:card" content="summary" />
+    <title>API Reference | StellaraeSecure Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="brand">StellaraeSecure</div>
+      <nav class="top-nav" aria-label="Docs navigation">
+        <a class="header-link" href="./index.html">Home</a>
+        <a class="header-link" href="./getting-started.html">Getting Started</a>
+        <a class="header-link" href="./self-hosting.html">Self-Hosting</a>
+        <a class="header-link active" href="./api.html">API</a>
+        <a class="header-link" href="./security-model.html">Security Model</a>
+      </nav>
+      <a
+        class="header-link"
+        href="https://github.com/stellarae/StellaraeSecure"
+        target="_blank"
+        rel="noreferrer"
+        >Repository</a
+      >
+    </header>
+
+    <main>
+      <section class="docs-shell">
+        <p class="eyebrow">Docs</p>
+        <h1>API Reference</h1>
+        <p>
+          This reference documents the currently implemented StellaraeSecure APIs with request and
+          response contracts. All endpoints below are derived from the service route handlers in
+          this repository.
+        </p>
+
+        <h2>Conventions</h2>
+        <div class="section-grid">
+          <div>
+            <h3>Content Type</h3>
+            <p>JSON request/response unless noted. Use <code>Content-Type: application/json</code>.</p>
+          </div>
+          <div>
+            <h3>Correlation</h3>
+            <p>
+              oauth2 accepts optional <code>x-correlation-id</code>; if absent, one is generated and
+              propagated to staffdb upstream calls.
+            </p>
+          </div>
+        </div>
+
+        <h2>Error Response Types</h2>
+        <h3>staffdb error payload</h3>
+        <pre><code>{
+  "error": "Validation error|Authentication error|Authorization error|Not found|...",
+  "status": 400
+}</code></pre>
+        <p class="small-note">
+          Typical status mapping: 400 validation, 401 authentication, 403 authorization, 404 not
+          found, 429 rate limited.
+        </p>
+
+        <h3>oauth2 error payload</h3>
+        <pre><code>{
+  "error": "validation_error|authentication_error|authorization_error|not_found|upstream_error|internal_error",
+  "message": "human-readable message"
+}</code></pre>
+
+        <h2>Service: staffdb</h2>
+        <p>
+          Base URL example: <code>http://127.0.0.1:3000</code>. API routes are under
+          <code>/api</code>.
+        </p>
+
+        <h3>Authentication and Headers</h3>
+        <ul>
+          <li>
+            Required header for <code>/api/*</code>: <code>Authorization: Bearer &lt;service_api_key&gt;</code>
+          </li>
+          <li>
+            Mutating endpoints (POST/PATCH/DELETE) also require caller service ID to be listed in
+            <code>PRIVILEGED_SERVICES</code>
+          </li>
+        </ul>
+
+        <h3>Health Endpoints</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GET</td>
+              <td>/healthz</td>
+              <td>None</td>
+              <td>None</td>
+              <td>{status, version, uptime}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/ready</td>
+              <td>None</td>
+              <td>None</td>
+              <td>{ready, database, service}</td>
+              <td><span class="status-badge">200/503</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Accounts API</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>POST</td>
+              <td>/api/accounts</td>
+              <td>Authorization</td>
+              <td>{username, email, password, account_type?}</td>
+              <td>AccountResponse</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/accounts/{id}</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>AccountResponse</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>PATCH</td>
+              <td>/api/accounts/{id}</td>
+              <td>Authorization</td>
+              <td>{email?, is_active?}</td>
+              <td>AccountResponse</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>DELETE</td>
+              <td>/api/accounts/{id}</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/accounts/lookup?email=... or ?username=...</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>AccountResponse</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Legacy Role API</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>POST</td>
+              <td>/api/accounts/{id}/roles</td>
+              <td>Authorization</td>
+              <td>{role: "admin|staff|user"}</td>
+              <td>RoleResponse</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/accounts/{id}/roles</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>{account_id, roles[]}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>DELETE</td>
+              <td>/api/accounts/{id}/roles/{role}</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>RBAC API</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>POST</td>
+              <td>/api/rbac/roles</td>
+              <td>Authorization</td>
+              <td>{name, description?, is_system?}</td>
+              <td>RbacRoleResponse</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/rbac/roles</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>RbacRoleResponse[]</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/rbac/permissions</td>
+              <td>Authorization</td>
+              <td>{permission_key, description?}</td>
+              <td>PermissionResponse</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/rbac/permissions</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>PermissionResponse[]</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/rbac/roles/{role_id}/permissions</td>
+              <td>Authorization</td>
+              <td>{permission_id}</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/rbac/accounts/{account_id}/roles</td>
+              <td>Authorization</td>
+              <td>{role_id}</td>
+              <td>AccountRoleAssignmentResponse</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/rbac/accounts/{account_id}/roles</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>AccountRoleAssignmentResponse[]</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>DELETE</td>
+              <td>/api/rbac/accounts/{account_id}/roles/{role_id}</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/rbac/accounts/{account_id}/permissions/effective</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>{account_id, permissions[]}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Audit and 2FA API</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GET</td>
+              <td>/api/audit/accounts/{id}?limit=&offset=</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>{account_id, events[], total, limit, offset}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/2fa/totp/{account_id}/enroll</td>
+              <td>Authorization</td>
+              <td>{issuer?}</td>
+              <td>{account_id, secret_base32, otpauth_uri}</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/2fa/totp/{account_id}/verify</td>
+              <td>Authorization</td>
+              <td>{code: "123456"}</td>
+              <td>{account_id, two_factor_enabled, method}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/2fa/status/{account_id}</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>{account_id, two_factor_enabled, method?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Service: oauth2</h2>
+        <p>
+          Base URL example: <code>http://127.0.0.1:4000</code>. oauth2 enforces a combination of
+          admin key, signed staff identity headers, permission claims, and step-up session freshness
+          for high-risk operations.
+        </p>
+
+        <h3>Admin/Signed Identity Headers</h3>
+        <pre><code>x-admin-key: &lt;admin-api-key&gt;
+x-staff-account-id: &lt;account-id&gt;
+x-staff-identity-ts: &lt;unix-seconds&gt;
+x-staff-identity-sig: &lt;hex-hmac-sha256(account_id:timestamp)&gt;
+x-correlation-id: &lt;optional-trace-id&gt;
+x-panel-session-id: &lt;required-on-high-risk-operations&gt;</code></pre>
+
+        <h3>Health Endpoints</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GET</td>
+              <td>/healthz</td>
+              <td>None</td>
+              <td>None</td>
+              <td>{status, service, environment, version}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/ready</td>
+              <td>None</td>
+              <td>None</td>
+              <td>{ready, service, database, staffdb_base_url, permission_enforcement_mode}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>OAuth Authorization Flow</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body / Query</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GET</td>
+              <td>/api/authorize</td>
+              <td>Signed identity headers</td>
+              <td>Query: response_type=code, client_id, redirect_uri, scope?, state?</td>
+              <td>{request_id, client_id, requested_scope[], expires_at}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/consent</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>{request_id, approve}</td>
+              <td>{approved, redirect_to}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/token</td>
+              <td>None</td>
+              <td>{grant_type, client_id, client_secret, code?, refresh_token?, redirect_uri?}</td>
+              <td>{access_token, token_type, expires_in, refresh_token, scope, permissions[]}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/revoke</td>
+              <td>x-admin-key + signed identity headers + x-panel-session-id</td>
+              <td>{token}</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/introspect</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>{token}</td>
+              <td>{active, client_id?, sub?, scope?, permissions?, exp?, token_type?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Client Management API</h3>
+        <p class="small-note">
+          Paths under <code>/api/clients/*</code> and <code>/api/admin/clients/*</code> map to the same
+          handlers and contracts.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>POST</td>
+              <td>/api/admin/clients</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>{name, redirect_uris[], allowed_scopes[], audience?}</td>
+              <td>{client_id, client_secret, name, redirect_uris[], allowed_scopes[], audience, owner_account_id}</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/admin/clients/{client_id}</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>None</td>
+              <td>{client_id, name, redirect_uris[], allowed_scopes[], audience, owner_account_id, collaborator_account_ids[], created_at}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>DELETE</td>
+              <td>/api/admin/clients/{client_id}</td>
+              <td>x-admin-key + signed identity headers + x-panel-session-id</td>
+              <td>None</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/admin/clients/{client_id}/secret</td>
+              <td>x-admin-key + signed identity headers + x-panel-session-id</td>
+              <td>None</td>
+              <td>{client_id, client_secret}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/admin/clients/{client_id}/collaborators</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>None</td>
+              <td>{client_id, owner_account_id, collaborator_account_ids[]}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/admin/clients/{client_id}/collaborators</td>
+              <td>x-admin-key + signed identity headers + x-panel-session-id</td>
+              <td>{account_id}</td>
+              <td>{client_id, owner_account_id, collaborator_account_ids[]}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>DELETE</td>
+              <td>/api/admin/clients/{client_id}/collaborators/{account_id}</td>
+              <td>x-admin-key + signed identity headers + x-panel-session-id</td>
+              <td>None</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Admin Token and Panel Endpoints</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>POST</td>
+              <td>/api/admin/tokens/revoke</td>
+              <td>x-admin-key + signed identity headers + x-panel-session-id</td>
+              <td>{token}</td>
+              <td>No body</td>
+              <td><span class="status-badge">204</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/admin/tokens/introspect</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>{token}</td>
+              <td>{active, client_id?, sub?, scope?, permissions?, exp?, token_type?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/admin/audit/events</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>None</td>
+              <td>{events: AdminAuditEvent[]}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/panel/session</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>None</td>
+              <td>{session_id, account_id, permissions[], expires_at}</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/panel/session/{session_id}</td>
+              <td>x-admin-key + signed identity headers</td>
+              <td>None</td>
+              <td>{active, session_id, account_id?, permissions?, expires_at?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Core Response Types</h2>
+        <h3>AccountResponse (staffdb)</h3>
+        <pre><code>{
+  "id": "uuid",
+  "username": "string",
+  "email": "string",
+  "is_active": true,
+  "account_type": "staff|user",
+  "two_factor_enabled": false,
+  "created_at": "RFC3339",
+  "updated_at": "RFC3339"
+}</code></pre>
+
+        <h3>TokenResponse (oauth2)</h3>
+        <pre><code>{
+  "access_token": "string",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "refresh_token": "string",
+  "scope": "openid profile",
+  "permissions": ["oauth.client.read"]
+}</code></pre>
+
+        <h3>PanelSessionResponse (oauth2)</h3>
+        <pre><code>{
+  "session_id": "uuid",
+  "account_id": "uuid",
+  "permissions": ["panel.session.verify"],
+  "expires_at": "RFC3339"
+}</code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>Copyright 2026 Stellarae. Open-source under the MIT License.</p>
+    </footer>
+  </body>
+</html>

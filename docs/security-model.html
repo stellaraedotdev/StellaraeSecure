@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Security model and trust boundaries for StellaraeSecure." />
+    <meta property="og:title" content="StellaraeSecure Docs | Security Model" />
+    <meta property="og:description" content="Review trust boundaries, signed identity headers, and step-up enforcement." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://secure.stellarae.org/docs/security-model.html" />
+    <meta name="twitter:card" content="summary" />
+    <title>Security Model | StellaraeSecure Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="brand">StellaraeSecure</div>
+      <nav class="top-nav" aria-label="Docs navigation">
+        <a class="header-link" href="./index.html">Home</a>
+        <a class="header-link" href="./getting-started.html">Getting Started</a>
+        <a class="header-link" href="./self-hosting.html">Self-Hosting</a>
+        <a class="header-link" href="./api.html">API</a>
+        <a class="header-link active" href="./security-model.html">Security Model</a>
+      </nav>
+      <a
+        class="header-link"
+        href="https://github.com/stellarae/StellaraeSecure"
+        target="_blank"
+        rel="noreferrer"
+        >Repository</a
+      >
+    </header>
+
+    <main>
+      <section class="docs-shell">
+        <p class="eyebrow">Docs</p>
+        <h1>Security Model</h1>
+        <p>
+          StellaraeSecure separates identity, authorization, and panel operations into dedicated
+          services with policy enforcement and auditable decision paths.
+        </p>
+
+        <h2>Trust boundaries</h2>
+        <ul>
+          <li>staffdb is the source of truth for accounts and permissions.</li>
+          <li>oauth2 performs authorization decisions and token lifecycle policy.</li>
+          <li>admin is an interface layer and does not own credential material.</li>
+        </ul>
+
+        <h2>Signed staff identity</h2>
+        <p>
+          Sensitive oauth2 endpoints require signed headers for actor identity and timestamp
+          validation, with configurable skew windows.
+        </p>
+
+        <h2>Step-up protection</h2>
+        <p>
+          High-risk operations require a fresh panel session via x-panel-session-id, reducing
+          replay and privilege escalation risk.
+        </p>
+
+        <h2>Second-factor policy</h2>
+        <p>
+          Critical admin actions currently require two_factor_enabled=true from staffdb account
+          records, backed by bootstrap TOTP enrollment/verification APIs.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Copyright 2026 Stellarae. Open-source under the MIT License.</p>
+    </footer>
+  </body>
+</html>
