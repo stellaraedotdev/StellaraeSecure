@@ -626,7 +626,8 @@ fn normalize_sqlite_url(database_url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        expected_hsk_assertion, normalize_sqlite_url, verify_hsk_assertion, verify_totp_code,
+        expected_hsk_assertion, normalize_sqlite_url, validate_secure_staffdb_url,
+        verify_hsk_assertion, verify_totp_code,
     };
 
     #[test]
@@ -660,6 +661,25 @@ mod tests {
     fn totp_verification_rejects_invalid_secret_encoding() {
         let err = verify_totp_code("!not-base32!", "123456", 59).expect_err("invalid secret");
         assert!(err.to_string().contains("Invalid TOTP secret encoding"));
+    }
+
+    #[test]
+    fn validate_secure_staffdb_url_allows_expected_transports_and_rejects_others() {
+        // HTTPS is always allowed
+        assert!(validate_secure_staffdb_url("https://staffdb.example.com").is_ok());
+        assert!(validate_secure_staffdb_url("https://staffdb.example.com/api").is_ok());
+
+        // HTTP loopback (127.0.0.1) is allowed as an explicit exception
+        assert!(validate_secure_staffdb_url("http://127.0.0.1:3000").is_ok());
+        assert!(validate_secure_staffdb_url("http://127.0.0.1/api/accounts").is_ok());
+
+        // Plain HTTP to non-loopback hosts is rejected
+        assert!(validate_secure_staffdb_url("http://example.com").is_err());
+        assert!(validate_secure_staffdb_url("http://localhost:3000").is_err());
+        assert!(validate_secure_staffdb_url("ftp://staffdb.example.com").is_err());
+
+        // Crafted URLs that start with "127.0.0.1" in path or subdomain are rejected
+        assert!(validate_secure_staffdb_url("http://127.0.0.1.evil.com").is_err());
     }
 }
 
