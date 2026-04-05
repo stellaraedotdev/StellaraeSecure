@@ -24,6 +24,9 @@ on:
       - 'staffdb/Dockerfile'
       - '.github/workflows/containers-ci.yml'
 
+permissions:
+  contents: read
+
 jobs:
   compose-validate:
     runs-on: ubuntu-latest
