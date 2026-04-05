@@ -87,7 +87,7 @@ impl Config {
             .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
 
         // Validate HTTPS in non-development environments
-        if environment != "development" && !staffdb_base_url.starts_with("https://") {
+        if !environment.eq_ignore_ascii_case("development") && !staffdb_base_url.starts_with("https://") {
             return Err(ConfigError::InvalidVar {
                 name: "STAFFDB_BASE_URL",
                 value: format!(
