@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937e1183a768ceffc36a47ee91e867d9
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Validate semantic tag and changelog entry
         if: github.ref_type == 'tag'

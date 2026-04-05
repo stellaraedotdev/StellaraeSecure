@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937e1183a768ceffc36a47ee91e867d9
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@e645b0cf01249a4b0404e0248fbf6b432f092ad3
