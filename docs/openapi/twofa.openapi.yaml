@@ -1,0 +1,178 @@
+openapi: 3.1.0
+info:
+  title: StellaraeSecure 2fa API
+  version: 0.1.0
+  description: Dedicated second-factor service for TOTP and HSK bootstrap and status lookups.
+servers:
+  - url: http://127.0.0.1:4100
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Healthy
+  /ready:
+    get:
+      summary: Readiness check
+      security: []
+      responses:
+        '200':
+          description: Ready
+  /api/status/{account_id}:
+    get:
+      summary: Get account second-factor status
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Factor status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorStatusResponse'
+  /api/totp/{account_id}/enroll:
+    post:
+      summary: Enroll or reset TOTP factor
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                issuer:
+                  type: string
+      responses:
+        '201':
+          description: TOTP enrollment initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollResponse'
+  /api/totp/{account_id}/verify:
+    post:
+      summary: Verify TOTP code
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Updated factor status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorStatusResponse'
+  /api/hsk/{account_id}/challenge:
+    post:
+      summary: Start HSK challenge
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id]
+              properties:
+                credential_id:
+                  type: string
+                label:
+                  type: string
+      responses:
+        '201':
+          description: HSK challenge response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HskChallengeResponse'
+  /api/hsk/{account_id}/verify:
+    post:
+      summary: Verify HSK assertion
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id, challenge, assertion]
+              properties:
+                credential_id:
+                  type: string
+                challenge:
+                  type: string
+                assertion:
+                  type: string
+      responses:
+        '200':
+          description: Updated factor status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorStatusResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    AccountIdPath:
+      name: account_id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    TotpEnrollResponse:
+      type: object
+      required: [account_id, secret_base32, otpauth_uri]
+      properties:
+        account_id:
+          type: string
+        secret_base32:
+          type: string
+        otpauth_uri:
+          type: string
+    HskChallengeResponse:
+      type: object
+      required: [account_id, credential_id, challenge, expires_at]
+      properties:
+        account_id:
+          type: string
+        credential_id:
+          type: string
+        challenge:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    FactorStatusResponse:
+      type: object
+      required: [account_id, two_factor_enabled, hsk_enabled]
+      properties:
+        account_id:
+          type: string
+        two_factor_enabled:
+          type: boolean
+        hsk_enabled:
+          type: boolean
+        method:
+          type: string
+          nullable: true

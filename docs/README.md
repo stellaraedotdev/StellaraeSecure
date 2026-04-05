@@ -9,6 +9,8 @@ This directory contains the static documentation site published via GitHub Pages
 - `self-hosting.html`: Deployment guidance and architecture targeting
 - `api.html`: Complete API reference (headers, request/response schemas, status behavior)
 - `security-model.html`: Security boundaries and enforcement model
+- `operations.html`: Runbooks for backup/restore, secret rotation, incident response, and monitoring
+- `openapi/*.openapi.yaml`: OpenAPI 3.1 contracts for `staffdb`, `oauth2`, and `2fa`
 
 ## Styling
 

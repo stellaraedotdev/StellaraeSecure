@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'oauth2/**'
+      - '2fa/**'
       - 'staffdb/**'
       - '.github/workflows/backend-ci.yml'
   push:
     paths:
       - 'oauth2/**'
+      - '2fa/**'
       - 'staffdb/**'
       - '.github/workflows/backend-ci.yml'
 
@@ -18,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [oauth2, staffdb]
+        service: [oauth2, staffdb, 2fa]
 
     defaults:
       run:
@@ -37,6 +39,7 @@ jobs:
           workspaces: |
             oauth2
             staffdb
+            2fa
 
       - name: Run tests
         run: cargo test

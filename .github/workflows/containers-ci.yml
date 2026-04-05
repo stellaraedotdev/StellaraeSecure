@@ -9,6 +9,7 @@ on:
       - 'admin/Dockerfile'
       - 'admin/nginx.conf'
       - 'oauth2/Dockerfile'
+      - '2fa/Dockerfile'
       - 'staffdb/Dockerfile'
       - '.github/workflows/containers-ci.yml'
   push:
@@ -19,6 +20,7 @@ on:
       - 'admin/Dockerfile'
       - 'admin/nginx.conf'
       - 'oauth2/Dockerfile'
+      - '2fa/Dockerfile'
       - 'staffdb/Dockerfile'
       - '.github/workflows/containers-ci.yml'
 
@@ -47,6 +49,9 @@ jobs:
           - name: oauth2
             context: oauth2
             dockerfile: oauth2/Dockerfile
+          - name: twofa
+            context: 2fa
+            dockerfile: 2fa/Dockerfile
           - name: admin
             context: admin
             dockerfile: admin/Dockerfile

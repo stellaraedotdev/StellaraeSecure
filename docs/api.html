@@ -36,6 +36,7 @@
         <a class="header-link" href="./self-hosting.html">Self-Hosting</a>
         <a class="header-link active" href="./api.html">API</a>
         <a class="header-link" href="./security-model.html">Security Model</a>
+        <a class="header-link" href="./operations.html">Operations</a>
       </nav>
       <a
         class="header-link"
@@ -55,6 +56,17 @@
           response contracts. All endpoints below are derived from the service route handlers in
           this repository.
         </p>
+
+        <h2>OpenAPI Contracts</h2>
+        <p>
+          Versioned OpenAPI 3.1 contracts for each service are available as source of truth for
+          client generation and external integrations.
+        </p>
+        <ul>
+          <li><a href="./openapi/staffdb.openapi.yaml">staffdb OpenAPI</a></li>
+          <li><a href="./openapi/oauth2.openapi.yaml">oauth2 OpenAPI</a></li>
+          <li><a href="./openapi/twofa.openapi.yaml">2fa OpenAPI</a></li>
+        </ul>
 
         <h2>Conventions</h2>
         <div class="section-grid">
@@ -404,6 +416,87 @@ x-panel-session-id: &lt;required-on-high-risk-operations&gt;</code></pre>
           <code>two_factor_enabled</code> (TOTP) or <code>hsk_enabled</code> is true on the staff account.
         </p>
 
+        <h2>Service: 2fa</h2>
+        <p>
+          Base URL example: <code>http://127.0.0.1:4100</code>. This service centralizes second-factor
+          enrollment/verification and status checks consumed by oauth2.
+        </p>
+
+        <h3>2fa Service Headers</h3>
+        <pre><code>Authorization: Bearer &lt;TWOFA_API_KEY&gt;</code></pre>
+
+        <h3>2fa Service Endpoints</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Headers</th>
+              <th>Request Body</th>
+              <th>Success Response Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GET</td>
+              <td>/healthz</td>
+              <td>None</td>
+              <td>None</td>
+              <td>{status, service}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/ready</td>
+              <td>None</td>
+              <td>None</td>
+              <td>{ready, database, service}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td>/api/status/{account_id}</td>
+              <td>Authorization</td>
+              <td>None</td>
+              <td>{account_id, two_factor_enabled, hsk_enabled, method?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/totp/{account_id}/enroll</td>
+              <td>Authorization</td>
+              <td>{issuer?}</td>
+              <td>{account_id, secret_base32, otpauth_uri}</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/totp/{account_id}/verify</td>
+              <td>Authorization</td>
+              <td>{code}</td>
+              <td>{account_id, two_factor_enabled, hsk_enabled, method?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/hsk/{account_id}/challenge</td>
+              <td>Authorization</td>
+              <td>{credential_id, label?}</td>
+              <td>{account_id, credential_id, challenge, expires_at}</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/hsk/{account_id}/verify</td>
+              <td>Authorization</td>
+              <td>{credential_id, challenge, assertion}</td>
+              <td>{account_id, two_factor_enabled, hsk_enabled, method?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+          </tbody>
+        </table>
+
         <h3>Health Endpoints</h3>
         <table>
           <thead>
@@ -633,6 +726,7 @@ x-panel-session-id: &lt;required-on-high-risk-operations&gt;</code></pre>
   "is_active": true,
   "account_type": "staff|user",
   "two_factor_enabled": false,
+  "hsk_enabled": false,
   "created_at": "RFC3339",
   "updated_at": "RFC3339"
 }</code></pre>

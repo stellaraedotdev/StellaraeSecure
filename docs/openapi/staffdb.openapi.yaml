@@ -1,0 +1,342 @@
+openapi: 3.1.0
+info:
+  title: StellaraeSecure staffdb API
+  version: 0.1.0
+  description: Account, RBAC, audit, and legacy 2FA bootstrap endpoints currently hosted in staffdb.
+servers:
+  - url: http://127.0.0.1:3000
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Healthy
+  /ready:
+    get:
+      summary: Readiness check
+      security: []
+      responses:
+        '200':
+          description: Ready
+        '503':
+          description: Not ready
+  /api/accounts:
+    post:
+      summary: Create account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+  /api/accounts/{id}:
+    get:
+      summary: Get account by id
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+    patch:
+      summary: Update account
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+      responses:
+        '200':
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+    delete:
+      summary: Disable account
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '204':
+          description: Account disabled
+  /api/accounts/lookup:
+    get:
+      summary: Lookup account by email or username
+      parameters:
+        - name: email
+          in: query
+          schema:
+            type: string
+        - name: username
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account lookup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+  /api/rbac/accounts/{account_id}/permissions/effective:
+    get:
+      summary: Get effective permission keys for an account
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Effective permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectivePermissionsResponse'
+  /api/2fa/totp/{account_id}/enroll:
+    post:
+      summary: Enroll TOTP bootstrap factor
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                issuer:
+                  type: string
+      responses:
+        '201':
+          description: TOTP enrollment initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollResponse'
+  /api/2fa/totp/{account_id}/verify:
+    post:
+      summary: Verify TOTP bootstrap code
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Updated second-factor status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorStatusResponse'
+  /api/2fa/hsk/{account_id}/challenge:
+    post:
+      summary: Start HSK challenge
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id]
+              properties:
+                credential_id:
+                  type: string
+                label:
+                  type: string
+      responses:
+        '201':
+          description: HSK challenge issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HskChallengeResponse'
+  /api/2fa/hsk/{account_id}/verify:
+    post:
+      summary: Verify HSK challenge assertion
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id, challenge, assertion]
+              properties:
+                credential_id:
+                  type: string
+                challenge:
+                  type: string
+                assertion:
+                  type: string
+      responses:
+        '200':
+          description: Updated second-factor status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorStatusResponse'
+  /api/2fa/status/{account_id}:
+    get:
+      summary: Get second-factor status
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account factor status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorStatusResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    AccountIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateAccountRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        account_type:
+          type: string
+          enum: [staff, user]
+    UpdateAccountRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        is_active:
+          type: boolean
+    AccountResponse:
+      type: object
+      required: [id, username, email, is_active, account_type, two_factor_enabled, hsk_enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        is_active:
+          type: boolean
+        account_type:
+          type: string
+          enum: [staff, user]
+        two_factor_enabled:
+          type: boolean
+        hsk_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    EffectivePermissionsResponse:
+      type: object
+      required: [account_id, permissions]
+      properties:
+        account_id:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    TotpEnrollResponse:
+      type: object
+      required: [account_id, secret_base32, otpauth_uri]
+      properties:
+        account_id:
+          type: string
+        secret_base32:
+          type: string
+        otpauth_uri:
+          type: string
+    HskChallengeResponse:
+      type: object
+      required: [account_id, credential_id, challenge, expires_at]
+      properties:
+        account_id:
+          type: string
+        credential_id:
+          type: string
+        challenge:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    FactorStatusResponse:
+      type: object
+      required: [account_id, two_factor_enabled, hsk_enabled]
+      properties:
+        account_id:
+          type: string
+        two_factor_enabled:
+          type: boolean
+        hsk_enabled:
+          type: boolean
+        method:
+          type: string
+          nullable: true

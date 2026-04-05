@@ -22,6 +22,32 @@ services:
     networks:
       - stellarae
 
+  twofa:
+    build:
+      context: ./2fa
+      dockerfile: Dockerfile
+    platform: ${STELLARAE_DOCKER_PLATFORM:-linux/amd64}
+    container_name: stellarae-twofa
+    restart: unless-stopped
+    depends_on:
+      staffdb:
+        condition: service_started
+    ports:
+      - "4100:4100"
+    environment:
+      TWOFA_HOST: 0.0.0.0
+      TWOFA_PORT: 4100
+      DATABASE_URL: sqlite:/app/data/twofa.sqlite
+      SERVICE_ID: twofa
+      LOG_LEVEL: ${STELLARAE_LOG_LEVEL:-info}
+      TWOFA_API_KEY: ${TWOFA_API_KEY:-dev-twofa-key-change-me}
+      STAFFDB_BASE_URL: http://staffdb:3000
+      STAFFDB_API_KEY: ${STAFFDB_OAUTH2_API_KEY:-dev-oauth2-staffdb-key}
+    volumes:
+      - twofa-data:/app/data
+    networks:
+      - stellarae
+
   oauth2:
     build:
       context: ./oauth2
@@ -31,6 +57,8 @@ services:
     restart: unless-stopped
     depends_on:
       staffdb:
+        condition: service_started
+      twofa:
         condition: service_started
     ports:
       - "4000:4000"
@@ -45,6 +73,8 @@ services:
       OAUTH2_ADMIN_API_KEY: ${OAUTH2_ADMIN_API_KEY:-dev-admin-key-change-me}
       STAFFDB_BASE_URL: http://staffdb:3000
       STAFFDB_API_KEY: ${STAFFDB_OAUTH2_API_KEY:-dev-oauth2-staffdb-key}
+      TWOFA_BASE_URL: http://twofa:4100
+      TWOFA_API_KEY: ${TWOFA_API_KEY:-dev-twofa-key-change-me}
       OAUTH2_STAFF_IDENTITY_HMAC_SECRET: ${OAUTH2_STAFF_IDENTITY_HMAC_SECRET:-dev-shared-hmac-secret-change-me}
       OAUTH2_PERMISSION_ENFORCEMENT_MODE: ${OAUTH2_PERMISSION_ENFORCEMENT_MODE:-observe}
       OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS: ${OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS:-120}
@@ -90,6 +120,8 @@ networks:
 
 volumes:
   staffdb-data:
+    driver: local
+  twofa-data:
     driver: local
   oauth2-data:
     driver: local

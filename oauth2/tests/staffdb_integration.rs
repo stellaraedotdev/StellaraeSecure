@@ -59,6 +59,8 @@ fn build_state(staffdb_base_url: String) -> AppState {
         admin_api_key: "admin-key".to_string(),
         staffdb_base_url,
         staffdb_api_key: "staffdb-key".to_string(),
+        twofa_base_url: None,
+        twofa_api_key: None,
         access_token_ttl_seconds: 900,
         refresh_token_ttl_seconds: 2592000,
         auth_code_ttl_seconds: 300,

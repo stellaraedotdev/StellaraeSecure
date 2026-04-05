@@ -23,6 +23,7 @@ use crate::{
         RefreshToken,
     },
     staffdb,
+    twofa,
     state::{generate_secret, now_plus_seconds, sha256_hex, AppState},
 };
 
@@ -306,9 +307,7 @@ async fn register_client(
     .await?;
 
     let owner_account_id = admin.actor_account_id.clone();
-    let owner_account =
-        staffdb::get_account_by_id(&state, &owner_account_id, &admin.correlation_id).await?;
-    if !(owner_account.two_factor_enabled || owner_account.hsk_enabled) {
+    if !account_has_second_factor(&state, &owner_account_id, &admin.correlation_id).await? {
         return Err(AppError::Authorization);
     }
 
@@ -918,7 +917,7 @@ async fn issue_panel_session(
     if !account.is_active || account.account_type != "staff" {
         return Err(AppError::Authorization);
     }
-    if !(account.two_factor_enabled || account.hsk_enabled) {
+    if !account_has_second_factor(&state, &account.id, &admin.correlation_id).await? {
         return Err(AppError::Authorization);
     }
 
@@ -1368,6 +1367,20 @@ fn enforce_permission_claim(
     Ok(())
 }
 
+async fn account_has_second_factor(
+    state: &AppState,
+    account_id: &str,
+    correlation_id: &str,
+) -> Result<bool, AppError> {
+    if state.config.twofa_base_url.is_some() && state.config.twofa_api_key.is_some() {
+        let factor_status = twofa::get_2fa_status(state, account_id, correlation_id).await?;
+        return Ok(factor_status.two_factor_enabled || factor_status.hsk_enabled);
+    }
+
+    let account = staffdb::get_account_by_id(state, account_id, correlation_id).await?;
+    Ok(account.two_factor_enabled || account.hsk_enabled)
+}
+
 fn parse_scope(scope: &str) -> Vec<String> {
     scope
         .split_whitespace()
@@ -1481,6 +1494,8 @@ mod tests {
             admin_api_key: "admin-key".to_string(),
             staffdb_base_url: "http://127.0.0.1:3000".to_string(),
             staffdb_api_key: "staffdb-key".to_string(),
+            twofa_base_url: None,
+            twofa_api_key: None,
             access_token_ttl_seconds: 900,
             refresh_token_ttl_seconds: 2592000,
             auth_code_ttl_seconds: 300,

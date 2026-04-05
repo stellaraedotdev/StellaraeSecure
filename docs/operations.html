@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Operational runbooks and monitoring guidance for StellaraeSecure deployments."
+    />
+    <meta property="og:title" content="StellaraeSecure Docs | Operations Runbooks" />
+    <meta
+      property="og:description"
+      content="Backup, restore, secret rotation, incident response, and monitoring/SLO practices for StellaraeSecure."
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://secure.stellarae.org/docs/operations.html" />
+    <meta name="twitter:card" content="summary" />
+    <title>Operations Runbooks | StellaraeSecure Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="brand">StellaraeSecure</div>
+      <nav class="top-nav" aria-label="Docs navigation">
+        <a class="header-link" href="./index.html">Home</a>
+        <a class="header-link" href="./getting-started.html">Getting Started</a>
+        <a class="header-link" href="./self-hosting.html">Self-Hosting</a>
+        <a class="header-link" href="./api.html">API</a>
+        <a class="header-link" href="./security-model.html">Security Model</a>
+        <a class="header-link active" href="./operations.html">Operations</a>
+      </nav>
+      <a
+        class="header-link"
+        href="https://github.com/stellarae/StellaraeSecure"
+        target="_blank"
+        rel="noreferrer"
+        >Repository</a
+      >
+    </header>
+
+    <main>
+      <section class="docs-shell">
+        <p class="eyebrow">Docs</p>
+        <h1>Operations Runbooks</h1>
+        <p>
+          This page provides baseline operating procedures for StellaraeSecure services in
+          self-hosted and production-like environments.
+        </p>
+
+        <h2>Scope</h2>
+        <ul>
+          <li>Services: staffdb, oauth2, 2fa, admin.</li>
+          <li>Runtime: containerized deployment using root compose files.</li>
+          <li>Data stores: SQLite volumes for each service.</li>
+        </ul>
+
+        <h2>Runbook: Backup</h2>
+        <p class="small-note">
+          Create backups from quiesced services or use snapshot-capable volumes to avoid partial
+          writes.
+        </p>
+        <pre><code># Stop write-heavy traffic first, then snapshot volumes.
+docker compose --env-file .env.compose stop oauth2 2fa staffdb
+
+# Example copy-out backup pattern (adjust paths for your host).
+mkdir -p backups/$(date +%F)
+docker run --rm -v stellaraesecure_staffdb-data:/from -v "$PWD"/backups/$(date +%F):/to alpine sh -c "cp -a /from /to/staffdb-data"
+docker run --rm -v stellaraesecure_oauth2-data:/from -v "$PWD"/backups/$(date +%F):/to alpine sh -c "cp -a /from /to/oauth2-data"
+docker run --rm -v stellaraesecure_twofa-data:/from -v "$PWD"/backups/$(date +%F):/to alpine sh -c "cp -a /from /to/twofa-data"
+
+# Resume services.
+docker compose --env-file .env.compose start staffdb oauth2 2fa</code></pre>
+
+        <h2>Runbook: Restore</h2>
+        <ol>
+          <li>Stop all services and verify no writers are active.</li>
+          <li>Restore volume contents from the target backup set.</li>
+          <li>Start staffdb first, then 2fa, then oauth2/admin.</li>
+          <li>Run health and readiness checks for all services.</li>
+          <li>Verify a known account and token workflow before opening traffic.</li>
+        </ol>
+        <pre><code>curl http://127.0.0.1:3000/ready
+curl http://127.0.0.1:4100/ready
+curl http://127.0.0.1:4000/ready
+curl http://127.0.0.1:8080/healthz</code></pre>
+
+        <h2>Runbook: Secret Rotation</h2>
+        <h3>Targets</h3>
+        <ul>
+          <li>STAFFDB_API_KEY</li>
+          <li>OAUTH2_ADMIN_API_KEY</li>
+          <li>TWOFA_API_KEY</li>
+          <li>OAUTH2_STAFF_IDENTITY_SIGNING_KEY</li>
+          <li>OAUTH2_TOKEN_SIGNING_KEY</li>
+        </ul>
+        <h3>Procedure</h3>
+        <ol>
+          <li>Generate replacement values in a secure secret manager.</li>
+          <li>Update `.env.compose` and any deployment secret stores.</li>
+          <li>Roll services in dependency order: staffdb, 2fa, oauth2, admin.</li>
+          <li>Run smoke checks for admin session issue/verify and OAuth token exchange.</li>
+          <li>Revoke stale panel sessions if identity signing keys changed.</li>
+        </ol>
+
+        <h2>Runbook: Incident Response</h2>
+        <h3>Severity model</h3>
+        <ul>
+          <li>SEV-1: Auth bypass, key compromise, or broad token abuse.</li>
+          <li>SEV-2: Degraded authorization decisions or 2fa verification failures.</li>
+          <li>SEV-3: Single-node failures with no active security impact.</li>
+        </ul>
+        <h3>Immediate actions</h3>
+        <ol>
+          <li>Capture affected correlation IDs and request samples.</li>
+          <li>Contain by rotating exposed keys and revoking active panel sessions.</li>
+          <li>Halt risky admin operations by restricting ingress to oauth2 admin paths.</li>
+          <li>Restore known-good service versions if regression is confirmed.</li>
+          <li>Publish incident timeline and remediation notes internally.</li>
+        </ol>
+
+        <h2>Monitoring and SLO Guidance</h2>
+        <h3>Recommended service-level indicators (SLIs)</h3>
+        <ul>
+          <li>Availability: percentage of successful `/ready` probes.</li>
+          <li>Latency: p95 response time for oauth2 `/api/token` and `/api/authorize`.</li>
+          <li>Error rate: 5xx ratio by service and endpoint family.</li>
+          <li>Policy health: rate of second-factor policy denials in oauth2 admin routes.</li>
+        </ul>
+
+        <h3>Initial SLO targets</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>SLO</th>
+              <th>Target</th>
+              <th>Window</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Control-plane availability (oauth2 + staffdb + 2fa ready)</td>
+              <td><span class="status-badge">99.9%</span></td>
+              <td>30 days</td>
+            </tr>
+            <tr>
+              <td>oauth2 token issue latency p95</td>
+              <td><span class="status-badge">&lt; 300ms</span></td>
+              <td>7 days</td>
+            </tr>
+            <tr>
+              <td>5xx error budget burn</td>
+              <td><span class="status-badge">&lt; 1%</span></td>
+              <td>30 days</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Alerting baseline</h3>
+        <ul>
+          <li>Page on sustained readiness failures over 5 minutes.</li>
+          <li>Page on oauth2 5xx rates above 2% for 10 minutes.</li>
+          <li>Ticket on elevated second-factor denials over rolling baseline.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Copyright 2026 Stellarae. Open-source under the MIT License.</p>
+    </footer>
+  </body>
+</html>

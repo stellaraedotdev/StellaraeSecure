@@ -9,3 +9,6 @@ INTERNAL/
 
 # IDE files
 .vscode/
+
+# Rust build artifacts
+**/target/

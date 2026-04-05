@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: StellaraeSecure oauth2 API
+  version: 0.1.0
+  description: OAuth2 authorization, admin client lifecycle, token management, and panel session APIs.
+servers:
+  - url: http://127.0.0.1:4000
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Healthy
+  /ready:
+    get:
+      summary: Readiness check
+      responses:
+        '200':
+          description: Ready
+  /api/authorize:
+    get:
+      summary: Start authorization code flow
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Consent pending payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizePendingResponse'
+  /api/consent:
+    post:
+      summary: Approve or deny pending consent
+      security:
+        - adminAndIdentity: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '200':
+          description: Consent decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+  /api/token:
+    post:
+      summary: Exchange auth code or refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Access and refresh tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+  /api/admin/clients:
+    post:
+      summary: Register OAuth client (requires second-factor readiness)
+      security:
+        - adminAndIdentity: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterClientRequest'
+      responses:
+        '201':
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterClientResponse'
+  /api/admin/clients/{client_id}:
+    get:
+      summary: Get OAuth client
+      security:
+        - adminAndIdentity: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+    delete:
+      summary: Delete OAuth client (step-up required)
+      security:
+        - adminIdentityStepup: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Client deleted
+  /api/panel/session:
+    post:
+      summary: Issue panel session (requires second-factor readiness)
+      security:
+        - adminAndIdentity: []
+      responses:
+        '201':
+          description: Panel session issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSessionResponse'
+  /api/panel/session/{session_id}:
+    get:
+      summary: Validate panel session
+      security:
+        - adminAndIdentity: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSessionValidationResponse'
+components:
+  securitySchemes:
+    adminAndIdentity:
+      type: apiKey
+      in: header
+      name: x-admin-key (plus x-staff-account-id, x-staff-identity-ts, x-staff-identity-sig)
+    adminIdentityStepup:
+      type: apiKey
+      in: header
+      name: x-admin-key (plus signed identity headers and x-panel-session-id)
+  schemas:
+    AuthorizePendingResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        client_id:
+          type: string
+        requested_scope:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+    ConsentRequest:
+      type: object
+      required: [request_id, approve]
+      properties:
+        request_id:
+          type: string
+        approve:
+          type: boolean
+    ConsentResponse:
+      type: object
+      properties:
+        approved:
+          type: boolean
+        redirect_to:
+          type: string
+    TokenRequest:
+      type: object
+      required: [grant_type, client_id, client_secret]
+      properties:
+        grant_type:
+          type: string
+        code:
+          type: string
+        refresh_token:
+          type: string
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        redirect_uri:
+          type: string
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    RegisterClientRequest:
+      type: object
+      required: [name, redirect_uris, allowed_scopes]
+      properties:
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        allowed_scopes:
+          type: array
+          items:
+            type: string
+        audience:
+          type: string
+    RegisterClientResponse:
+      type: object
+      properties:
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        allowed_scopes:
+          type: array
+          items:
+            type: string
+        audience:
+          type: string
+        owner_account_id:
+          type: string
+    ClientResponse:
+      type: object
+      properties:
+        client_id:
+          type: string
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        allowed_scopes:
+          type: array
+          items:
+            type: string
+        audience:
+          type: string
+        owner_account_id:
+          type: string
+        collaborator_account_ids:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+    PanelSessionResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        account_id:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+    PanelSessionValidationResponse:
+      type: object
+      properties:
+        active:
+          type: boolean
+        session_id:
+          type: string
+        account_id:
+          type: string
+          nullable: true
+        permissions:
+          type: array
+          nullable: true
+          items:
+            type: string
+        expires_at:
+          type: string
+          nullable: true
+          format: date-time

@@ -32,6 +32,8 @@ pub struct Config {
     pub admin_api_key: String,
     pub staffdb_base_url: String,
     pub staffdb_api_key: String,
+    pub twofa_base_url: Option<String>,
+    pub twofa_api_key: Option<String>,
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
     pub auth_code_ttl_seconds: i64,
@@ -86,6 +88,16 @@ impl Config {
 
         let staffdb_api_key = env::var("STAFFDB_API_KEY")
             .map_err(|_| ConfigError::MissingVar("STAFFDB_API_KEY"))?;
+
+        let twofa_base_url = env::var("TWOFA_BASE_URL")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+
+        let twofa_api_key = env::var("TWOFA_API_KEY")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
 
         let access_token_ttl_seconds = env::var("OAUTH2_ACCESS_TOKEN_TTL_SECONDS")
             .unwrap_or_else(|_| "900".to_string())
@@ -185,6 +197,8 @@ impl Config {
             admin_api_key,
             staffdb_base_url,
             staffdb_api_key,
+            twofa_base_url,
+            twofa_api_key,
             access_token_ttl_seconds,
             refresh_token_ttl_seconds,
             auth_code_ttl_seconds,

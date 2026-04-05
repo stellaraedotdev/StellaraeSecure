@@ -37,8 +37,11 @@ There is no way to directly use the official 2FA system.
 There is no public API for our 2FA system, but you can run your own server and use the client libraries in `lib` to integrate with it.
 
 Current implementation status:
-- A bootstrap internal TOTP enrollment/verification path is now available in `staffdb` for service-to-service usage.
-- Dedicated standalone `2fa` and `hsk` services remain planned and will absorb this logic in a later extraction phase.
+- Dedicated standalone `2fa` service is now available for TOTP and HSK bootstrap flows.
+- `oauth2` can enforce second-factor readiness through the `2fa` service (`TOTP OR HSK`) when configured.
+- Legacy bootstrap endpoints in `staffdb` remain available during migration.
+- OpenAPI 3.1 contracts are published in `docs/openapi/` for `staffdb`, `oauth2`, and `2fa`.
+- Operations runbooks and monitoring/SLO guidance are published in `docs/operations.html`.
 
 ## Architecture
 StellaraeSecure is built using a microservices architecture, with each project being its own service that can be deployed and scaled independently. The services communicate with each other using REST APIs, and all data is stored in a central database.
@@ -108,6 +111,12 @@ docker buildx build --platform linux/amd64,linux/arm64 -f staffdb/Dockerfile -t 
 docker buildx build --platform linux/amd64,linux/arm64 -f oauth2/Dockerfile -t ghcr.io/<org>/stellarae-oauth2:latest oauth2 --push
 docker buildx build --platform linux/amd64,linux/arm64 -f admin/Dockerfile -t ghcr.io/<org>/stellarae-admin:latest admin --push
 ```
+
+Automated release publishing is also available via GitHub Actions:
+
+- Workflow: `.github/workflows/release-images.yml`
+- Trigger: push tag matching `v*` (for example `v0.2.0`) or manual dispatch
+- Output: multi-arch GHCR images for `staffdb`, `oauth2`, `2fa`, and `admin`
 
 ## Contributing
 While contributions are welcome, we ask that you understand that it can take a long amount of time for a PR to be reviewed and merged. The sensitive nature of this project means that we have to be very careful about what code we merge, and we have to thoroughly review every line of code that is added to the project.
