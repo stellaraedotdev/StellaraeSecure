@@ -15,6 +15,9 @@ Older alpha and beta releases (below the last stable release) are not eligible f
 
 ## Reporting a Vulnerability
 
+We now support GitHub's private reporting
+
+### Via Email
 Vulnerabilities must be reported to security@stellarae.dev
 EMAIL FORMAT:
 
@@ -25,5 +28,5 @@ At the top of the body (optionally) include a longer description to fill in for 
 - If you are able, please mark the email as URGENT if the vulnerability is believed to pose an immediate credible threat.
 
 ### Life or death?
-If the issue is really that severe, or if you are privacy-concious you can use our public PGP key found on [our website](stellarae.dev/security/keys/reporting_key) for extra encryption and include your public key as an attachment named {YOUR_EMAIL_HERE}_PGP.{format, .PEM preffered}
+If the issue is really that severe, or if you are privacy-conscious you can use our public PGP key found on [our website](https://stellarae.dev/security/keys/reporting_key) for extra encryption and include your public key as an attachment named {YOUR_EMAIL_HERE}_PGP.{format, .PEM preferred}
 If you are a StellaraeSecure member an option to link a key to your account for automatic encryption will soon be available to secure communications automatically.
