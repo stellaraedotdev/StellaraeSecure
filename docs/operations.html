@@ -68,6 +68,9 @@
           Create backups from quiesced services or use snapshot-capable volumes to avoid partial
           writes.
         </p>
+        <p class="small-note">
+          Scripted option: <code>scripts/ops/backup.sh</code> (supports volume overrides via env vars).
+        </p>
         <pre><code># Stop write-heavy traffic first, then snapshot volumes.
 docker compose --env-file .env.compose stop oauth2 2fa staffdb
 
@@ -88,6 +91,9 @@ docker compose --env-file .env.compose start staffdb oauth2 2fa</code></pre>
           <li>Run health and readiness checks for all services.</li>
           <li>Verify a known account and token workflow before opening traffic.</li>
         </ol>
+        <p class="small-note">
+          Scripted option: <code>scripts/ops/restore.sh &lt;backup-directory&gt;</code>.
+        </p>
         <pre><code>curl http://127.0.0.1:3000/ready
 curl http://127.0.0.1:4100/ready
 curl http://127.0.0.1:4000/ready
@@ -128,6 +134,10 @@ curl http://127.0.0.1:8080/healthz</code></pre>
         </ol>
 
         <h2>Monitoring and SLO Guidance</h2>
+        <h3>Metrics endpoints</h3>
+        <pre><code>curl http://127.0.0.1:3000/metrics
+      curl http://127.0.0.1:4000/metrics
+      curl http://127.0.0.1:4100/metrics</code></pre>
         <h3>Recommended service-level indicators (SLIs)</h3>
         <ul>
           <li>Availability: percentage of successful `/ready` probes.</li>

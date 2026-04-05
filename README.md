@@ -42,6 +42,7 @@ Current implementation status:
 - Legacy bootstrap endpoints in `staffdb` remain available during migration.
 - OpenAPI 3.1 contracts are published in `docs/openapi/` for `staffdb`, `oauth2`, and `2fa`.
 - Operations runbooks and monitoring/SLO guidance are published in `docs/operations.html`.
+- Metrics endpoints are available at `/metrics` for `staffdb`, `oauth2`, and `2fa`.
 
 ## Architecture
 StellaraeSecure is built using a microservices architecture, with each project being its own service that can be deployed and scaled independently. The services communicate with each other using REST APIs, and all data is stored in a central database.
@@ -117,6 +118,24 @@ Automated release publishing is also available via GitHub Actions:
 - Workflow: `.github/workflows/release-images.yml`
 - Trigger: push tag matching `v*` (for example `v0.2.0`) or manual dispatch
 - Output: multi-arch GHCR images for `staffdb`, `oauth2`, `2fa`, and `admin`
+
+Release governance:
+
+- Tags are validated against semantic format (`vMAJOR.MINOR.PATCH`) before publishing.
+- `CHANGELOG.md` must include a matching `## [vX.Y.Z]` entry for tag-based releases.
+
+## CI Quality and Security Gates
+
+- `.github/workflows/backend-ci.yml`: Rust test matrix for `oauth2`, `staffdb`, and `2fa`
+- `.github/workflows/openapi-ci.yml`: OpenAPI contract validation/linting
+- `.github/workflows/security-ci.yml`: dependency audit (`cargo audit`) + filesystem security scan (Trivy)
+- `.github/workflows/containers-ci.yml`: compose validation and multi-arch container build checks
+
+## Operational Automation Scripts
+
+- `scripts/ops/backup.sh`: snapshots service volumes to compressed backups
+- `scripts/ops/restore.sh <backup-dir>`: restores snapshots to service volumes
+- `scripts/release/validate-tag.sh <tag>`: enforces semantic release tags and changelog entry
 
 ## Contributing
 While contributions are welcome, we ask that you understand that it can take a long amount of time for a PR to be reviewed and merged. The sensitive nature of this project means that we have to be very careful about what code we merge, and we have to thoroughly review every line of code that is added to the project.

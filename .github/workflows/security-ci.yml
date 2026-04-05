@@ -1,0 +1,60 @@
+name: Security CI
+
+on:
+  pull_request:
+    paths:
+      - 'oauth2/**'
+      - '2fa/**'
+      - 'staffdb/**'
+      - 'Dockerfile'
+      - '**/Dockerfile'
+      - '.github/workflows/security-ci.yml'
+  push:
+    paths:
+      - 'oauth2/**'
+      - '2fa/**'
+      - 'staffdb/**'
+      - 'Dockerfile'
+      - '**/Dockerfile'
+      - '.github/workflows/security-ci.yml'
+
+jobs:
+  cargo-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [oauth2, staffdb, 2fa]
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit dependencies
+        run: cargo audit
+
+  trivy-fs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem security scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'

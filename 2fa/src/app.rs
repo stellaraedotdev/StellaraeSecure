@@ -1,8 +1,12 @@
-use std::sync::Arc;
+use std::{
+    sync::{Arc, OnceLock},
+    time::Instant,
+};
 
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
@@ -19,6 +23,7 @@ use uuid::Uuid;
 use crate::{config::Config, error::AppError};
 
 type HmacSha1 = Hmac<Sha1>;
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct AppState {
@@ -110,6 +115,7 @@ pub async fn build_app(config: Config) -> Result<Router, AppError> {
     Ok(Router::new()
         .route("/healthz", get(healthz))
         .route("/ready", get(ready))
+        .route("/metrics", get(metrics))
         .route("/api/status/:account_id", get(get_status))
         .route("/api/totp/:account_id/enroll", post(enroll_totp))
         .route("/api/totp/:account_id/verify", post(verify_totp))
@@ -131,6 +137,27 @@ async fn ready(State(state): State<Arc<AppState>>) -> Json<ReadyResponse> {
         database: "ok",
         service: state.config.service_id.clone(),
     })
+}
+
+async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let uptime_seconds = PROCESS_START.get_or_init(Instant::now).elapsed().as_secs();
+    let body = format!(
+        "# HELP service_uptime_seconds Process uptime in seconds\n\
+# TYPE service_uptime_seconds gauge\n\
+service_uptime_seconds{{service=\"{}\"}} {}\n\
+# HELP service_info Static service metadata\n\
+# TYPE service_info gauge\n\
+service_info{{service=\"{}\",version=\"{}\"}} 1\n",
+        state.config.service_id,
+        uptime_seconds,
+        state.config.service_id,
+        env!("CARGO_PKG_VERSION")
+    );
+
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        body,
+    )
 }
 
 fn assert_api_key(state: &AppState, headers: &HeaderMap) -> Result<(), AppError> {
@@ -575,6 +602,46 @@ fn normalize_sqlite_url(database_url: &str) -> String {
         return database_url.to_string();
     }
     format!("sqlite:{}", database_url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        expected_hsk_assertion, normalize_sqlite_url, verify_hsk_assertion, verify_totp_code,
+    };
+
+    #[test]
+    fn normalize_sqlite_url_handles_plain_paths_and_memory() {
+        assert_eq!(normalize_sqlite_url("sqlite::memory:"), "sqlite::memory:");
+        assert_eq!(normalize_sqlite_url("sqlite:twofa.sqlite"), "sqlite:twofa.sqlite");
+        assert_eq!(normalize_sqlite_url("twofa.sqlite"), "sqlite:twofa.sqlite");
+    }
+
+    #[test]
+    fn hsk_assertion_round_trip_verification() {
+        let challenge = "challenge-123";
+        let credential = "cred-abc";
+        let assertion = expected_hsk_assertion(challenge, credential);
+
+        assert!(verify_hsk_assertion(challenge, credential, &assertion));
+        assert!(!verify_hsk_assertion(challenge, credential, "bad-assertion"));
+    }
+
+    #[test]
+    fn totp_verification_matches_known_vector() {
+        // RFC 6238 test secret for SHA-1: "12345678901234567890"
+        let secret_base32 = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+        // At t=59s, the 8-digit value is 94287082; this implementation uses 6 digits.
+        let code = "287082";
+        let ok = verify_totp_code(secret_base32, code, 59).expect("totp verification should run");
+        assert!(ok);
+    }
+
+    #[test]
+    fn totp_verification_rejects_invalid_secret_encoding() {
+        let err = verify_totp_code("!not-base32!", "123456", 59).expect_err("invalid secret");
+        assert!(err.to_string().contains("Invalid TOTP secret encoding"));
+    }
 }
 
 async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {

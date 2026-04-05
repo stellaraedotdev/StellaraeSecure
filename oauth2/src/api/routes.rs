@@ -1,6 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
+    response::IntoResponse,
     routing::{delete, get, post},
     Json, Router,
 };
@@ -8,6 +9,7 @@ use chrono::Utc;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use std::{sync::OnceLock, time::Instant};
 use uuid::Uuid;
 
 use crate::{
@@ -54,6 +56,7 @@ const DECISION_OBSERVE_DENY: &str = "observe_deny";
 const DECISION_SKIP: &str = "skip";
 
 type HmacSha256 = Hmac<Sha256>;
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -223,6 +226,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/ready", get(ready))
+        .route("/metrics", get(metrics))
         .route("/api/clients", post(register_client))
         .route(
             "/api/clients/:client_id",
@@ -291,6 +295,28 @@ async fn ready(State(state): State<AppState>) -> Json<ReadyResponse> {
             .as_str()
             .to_string(),
     })
+}
+
+async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
+    let uptime_seconds = PROCESS_START.get_or_init(Instant::now).elapsed().as_secs();
+    let body = format!(
+        "# HELP service_uptime_seconds Process uptime in seconds\n\
+# TYPE service_uptime_seconds gauge\n\
+service_uptime_seconds{{service=\"{}\"}} {}\n\
+# HELP service_info Static service metadata\n\
+# TYPE service_info gauge\n\
+service_info{{service=\"{}\",version=\"{}\",environment=\"{}\"}} 1\n",
+        state.config.service_id,
+        uptime_seconds,
+        state.config.service_id,
+        env!("CARGO_PKG_VERSION"),
+        state.config.environment
+    );
+
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        body,
+    )
 }
 
 async fn register_client(

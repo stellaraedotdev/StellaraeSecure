@@ -2,14 +2,21 @@
 // Rust-based account database for managing staff and user accounts
 
 use axum::{
+    http::header::CONTENT_TYPE,
     http::StatusCode,
+    response::IntoResponse,
     response::Json,
     routing::get,
     Router,
 };
 use serde_json::json;
-use std::sync::Arc;
+use std::{
+    sync::{Arc, OnceLock},
+    time::Instant,
+};
 use stellarae_staffdb::{config::Config, db, logger, api, AppState};
+
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
 
 /// Health check response
 #[derive(serde::Serialize)]
@@ -49,6 +56,24 @@ async fn ready(axum::extract::State(state): axum::extract::State<Arc<AppState>>)
     )
 }
 
+/// Metrics endpoint (Prometheus text format)
+async fn metrics(axum::extract::State(state): axum::extract::State<Arc<AppState>>) -> impl IntoResponse {
+    let uptime_seconds = PROCESS_START.get_or_init(Instant::now).elapsed().as_secs();
+    let body = format!(
+        "# HELP service_uptime_seconds Process uptime in seconds\n\
+# TYPE service_uptime_seconds gauge\n\
+service_uptime_seconds{{service=\"staffdb\"}} {}\n\
+# HELP service_info Static service metadata\n\
+# TYPE service_info gauge\n\
+service_info{{service=\"staffdb\",version=\"{}\",environment=\"{}\"}} 1\n",
+        uptime_seconds,
+        env!("CARGO_PKG_VERSION"),
+        state.config.environment
+    );
+
+    ([(CONTENT_TYPE, "text/plain; version=0.0.4")], body)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize structured logging
@@ -82,6 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/healthz", get(health))
         .route("/ready", get(ready))
+        .route("/metrics", get(metrics))
         .nest("/api", api::routes(state.clone()))
         .with_state(state.clone());
 

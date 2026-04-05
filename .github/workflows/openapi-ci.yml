@@ -1,0 +1,29 @@
+name: OpenAPI CI
+
+on:
+  pull_request:
+    paths:
+      - 'docs/openapi/**'
+      - '.github/workflows/openapi-ci.yml'
+  push:
+    paths:
+      - 'docs/openapi/**'
+      - '.github/workflows/openapi-ci.yml'
+
+jobs:
+  lint-openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate OpenAPI schema structure
+        run: npx --yes @apidevtools/swagger-cli@4.0.4 validate docs/openapi/*.yaml
+
+      - name: Lint OpenAPI style and quality
+        run: npx --yes @redocly/cli@1.27.1 lint docs/openapi/*.yaml
