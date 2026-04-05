@@ -65,7 +65,7 @@ services:
     environment:
       OAUTH2_HOST: 0.0.0.0
       OAUTH2_PORT: 4000
-      OAUTH2_ISSUER: ${OAUTH2_ISSUER:-https://secure.stellarae.org/oauth2/public}
+      OAUTH2_ISSUER: ${OAUTH2_ISSUER:-https://secure.stellarae.dev/oauth2/public}
       SERVICE_ID: oauth2
       ENVIRONMENT: ${STELLARAE_ENVIRONMENT:-development}
       LOG_LEVEL: ${STELLARAE_LOG_LEVEL:-info}

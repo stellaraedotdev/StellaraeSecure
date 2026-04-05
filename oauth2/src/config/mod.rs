@@ -78,7 +78,7 @@ impl Config {
             .map_err(|_| ConfigError::MissingVar("DATABASE_URL"))?;
 
         let issuer = env::var("OAUTH2_ISSUER")
-            .unwrap_or_else(|_| "https://secure.stellarae.org/oauth2/public".to_string());
+            .unwrap_or_else(|_| "https://secure.stellarae.dev/oauth2/public".to_string());
 
         let admin_api_key = env::var("OAUTH2_ADMIN_API_KEY")
             .map_err(|_| ConfigError::MissingVar("OAUTH2_ADMIN_API_KEY"))?;

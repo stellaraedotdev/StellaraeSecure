@@ -24,10 +24,10 @@ StellaraeSecure is a group of projects in a unified repository, each project can
 Yes! Whether you want to integrate with our OAuth2 server to have an official SSO option by us, or if you want to use out code to run your own instance of the server, you are free to do so within the bounds of the MIT license. 
 
 ### How can I link to your server?
-You can link to our server by using the following URL: `https://secure.stellarae.org/oauth2/public` in your OAuth2 client configuration, then create an application at `https://secure.stellarae.org/admin` to get your client ID and secret.
+You can link to our server by using the following URL: `https://secure.stellarae.dev/oauth2/public` in your OAuth2 client configuration, then create an application at `https://secure.stellarae.dev/admin` to get your client ID and secret.
 
 You MUST have a StellaraeSecure account to create an application, and MUST have 2FA via either TOTP or a hardware key.
-Only staff members may use secure.stellarae.org/oauth2/staff, which is the staff-only instance of the OAuth2 server.
+Only staff members may use secure.stellarae.dev/oauth2/staff, which is the staff-only instance of the OAuth2 server.
 
 ## Can OAuth2 clients use the 2FA system?
 If a client is configured to require 2FA, then users will be prompted to set up either a TOTP 2FA method or a hardware security key. Once they have set up their 2FA method, they will be required to use it when logging in to any application that requires 2FA.
@@ -124,7 +124,7 @@ While contributions are welcome, we ask that you understand that it can take a l
 Contributions that contain ANY binary files will be automatically rejected, add a build script like a normal person if things must be compiled. This is to prevent any malicious code from being added to the project without our knowledge.
 
 ## Hack us!
-There is no bug bounty, but if you want to try to find a vulnerability please use <\servicename>.hackme.stellarae.org. It runs the same build number but is seperate from the production servers and therefore has no data or accounts. If you find a vulnerability, please report it to us at security@stellarae.org.
+There is no bug bounty, but if you want to try to find a vulnerability please use <\servicename>.hackme.stellarae.dev. It runs the same build number but is seperate from the production servers and therefore has no data or accounts. If you find a vulnerability, please report it to us at security@stellarae.dev.
 
 <sub>Please use our PGP key when reporting vulnerabilities.</sub>
 

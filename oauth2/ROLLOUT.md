@@ -217,7 +217,7 @@ GROUP BY operation;
 | `OAUTH2_HOST` | 127.0.0.1 | Bind address |
 | `OAUTH2_PORT` | 4000 | HTTP port |
 | `DATABASE_URL` | (required) | SQLite or PostgreSQL connection |
-| `OAUTH2_ISSUER` | https://secure.stellarae.org/oauth2/public | JWT issuer claim |
+| `OAUTH2_ISSUER` | https://secure.stellarae.dev/oauth2/public | JWT issuer claim |
 | `OAUTH2_ADMIN_API_KEY` | (required) | Secret for admin namespace (x-admin-key) |
 | `OAUTH2_STAFFDB_BASE_URL` | http://127.0.0.1:3000 | Staffdb service location |
 | `OAUTH2_STAFFDB_API_KEY` | (required) | Shared secret with staffdb |
