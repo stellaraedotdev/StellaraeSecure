@@ -3,6 +3,17 @@ use serde::Deserialize;
 use crate::error::AppError;
 use crate::state::AppState;
 
+/// Validates that the staffdb base URL uses HTTPS (or is localhost in dev).
+/// Prevents cleartext transmission of sensitive data like account IDs.
+fn validate_secure_url(base_url: &str) -> Result<(), AppError> {
+    if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
+        return Err(AppError::Internal(
+            format!("Insecure transport to staffdb: {} does not use HTTPS or localhost", base_url)
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct StaffAccount {
     pub id: String,
@@ -28,6 +39,7 @@ pub async fn lookup_account(
     email: Option<&str>,
     correlation_id: &str,
 ) -> Result<StaffAccount, AppError> {
+    validate_secure_url(&state.config.staffdb_base_url)?;
     let mut url = format!("{}/api/accounts/lookup", state.config.staffdb_base_url.trim_end_matches('/'));
 
     let mut params = vec![];
@@ -74,6 +86,7 @@ pub async fn get_account_by_id(
     account_id: &str,
     correlation_id: &str,
 ) -> Result<StaffAccount, AppError> {
+    validate_secure_url(&state.config.staffdb_base_url)?;
     let url = format!(
         "{}/api/accounts/{}",
         state.config.staffdb_base_url.trim_end_matches('/'),
@@ -111,6 +124,7 @@ pub async fn get_effective_permissions(
     account_id: &str,
     correlation_id: &str,
 ) -> Result<EffectivePermissions, AppError> {
+    validate_secure_url(&state.config.staffdb_base_url)?;
     let url = format!(
         "{}/api/rbac/accounts/{}/permissions/effective",
         state.config.staffdb_base_url.trim_end_matches('/'),
