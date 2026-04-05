@@ -1,0 +1,7 @@
+[advisories]
+# RUSTSEC-2023-0071: rsa crate Marvin Attack vulnerability.
+# This is pulled in as a transitive dependency via sqlx-mysql, which is an
+# optional sqlx feature. This project only uses SQLite; the MySQL driver
+# (and therefore the rsa crate) is never compiled or executed.
+# No patch is available upstream for rsa 0.9.x.
+ignore = ["RUSTSEC-2023-0071"]
