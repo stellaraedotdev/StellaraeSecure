@@ -664,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_secure_staffdb_url_allows_expected_transports_and_rejects_others() {
+    fn validate_secure_staffdb_url_enforces_transport_security() {
         // HTTPS is always allowed
         assert!(validate_secure_staffdb_url("https://staffdb.example.com").is_ok());
         assert!(validate_secure_staffdb_url("https://staffdb.example.com/api").is_ok());
