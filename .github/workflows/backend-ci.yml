@@ -14,6 +14,9 @@ on:
       - 'staffdb/**'
       - '.github/workflows/backend-ci.yml'
 
+permissions:
+  contents: read
+
 jobs:
   rust-tests:
     runs-on: ubuntu-latest
