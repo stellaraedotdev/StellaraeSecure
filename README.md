@@ -1,4 +1,3 @@
-META: MARK-CONFIDENTIAL
 # StellaraeSecure
  
 StellaraeSecure is a set of tools and resources designed to enhance the security of internal applications, such as our email services, git server, etc. 
