@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937e1183a768ceffc36a47ee91e867d9
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Trivy filesystem security scan
         uses: aquasecurity/trivy-action@6e7b7d1feac6b6d0511ae5a28ed1e954671674c7

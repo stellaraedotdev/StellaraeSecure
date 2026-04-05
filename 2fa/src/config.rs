@@ -59,15 +59,23 @@ impl Config {
         let staffdb_base_url = optional_non_empty("STAFFDB_BASE_URL");
         let staffdb_api_key = optional_non_empty("STAFFDB_API_KEY");
 
-        // Validate HTTPS for staffdb_base_url if set (except for localhost in dev)
+        // Validate HTTPS for staffdb_base_url if set, with an explicit loopback exception.
         if let Some(ref url) = staffdb_base_url {
-            if !url.starts_with("https://") && !url.starts_with("http://127.0.0.1") {
+            let parsed = reqwest::Url::parse(url).map_err(|_| ConfigError::InvalidVar {
+                name: "STAFFDB_BASE_URL",
+                value: "must be a valid URL".to_string(),
+            })?;
+
+            let is_https = parsed.scheme() == "https";
+            let is_loopback_http =
+                parsed.scheme() == "http" && matches!(parsed.host_str(), Some("127.0.0.1"));
+
+            if !is_https && !is_loopback_http {
                 return Err(ConfigError::InvalidVar {
                     name: "STAFFDB_BASE_URL",
-                    value: format!(
-                        "{}. Must use HTTPS (https://) or localhost (http://127.0.0.1)",
-                        url
-                    ),
+                    value:
+                        "Must use HTTPS (https://) or the explicit loopback exception http://127.0.0.1"
+                            .to_string(),
                 });
             }
         }

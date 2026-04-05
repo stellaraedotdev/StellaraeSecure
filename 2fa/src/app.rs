@@ -178,12 +178,18 @@ fn assert_api_key(state: &AppState, headers: &HeaderMap) -> Result<(), AppError>
     Ok(())
 }
 
-/// Validates that the staffdb base URL uses HTTPS (or is localhost in dev).
-/// Prevents cleartext transmission of sensitive data like account IDs.
+/// Validates that the staffdb base URL uses HTTPS, with an explicit
+/// loopback exception for http://127.0.0.1.
 fn validate_secure_staffdb_url(base_url: &str) -> Result<(), AppError> {
-    if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
+    let parsed = reqwest::Url::parse(base_url)
+        .map_err(|_| AppError::Internal("Invalid staffdb base URL".to_string()))?;
+
+    let is_https = parsed.scheme() == "https";
+    let is_loopback_http = parsed.scheme() == "http" && matches!(parsed.host_str(), Some("127.0.0.1"));
+
+    if !is_https && !is_loopback_http {
         return Err(AppError::Internal(
-            format!("Insecure transport to staffdb: {} does not use HTTPS or localhost", base_url)
+            "Insecure transport to staffdb: must use HTTPS or http://127.0.0.1".to_string(),
         ));
     }
     Ok(())

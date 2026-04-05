@@ -6,36 +6,38 @@ use crate::state::AppState;
 /// Validates that the staffdb base URL uses HTTPS (or approved dev loopbacks in development).
 /// Prevents cleartext transmission of sensitive data like account IDs.
 fn validate_secure_url(base_url: &str, environment: &str) -> Result<(), AppError> {
-    // Production: Always require HTTPS
-    if environment != "development" {
-        if !base_url.starts_with("https://") {
-            return Err(AppError::Internal(
-                format!("Insecure transport to staffdb: {} does not use HTTPS in {} environment", base_url, environment)
-            ));
-        }
+    let parsed = reqwest::Url::parse(base_url)
+        .map_err(|_| AppError::Config("STAFFDB_BASE_URL is not a valid URL".to_string()))?;
+
+    if parsed.scheme() == "https" {
         return Ok(());
     }
 
-    // Development: Allow HTTPS, localhost variants, and docker service names
-    let allowed_schemes = [
-        "https://",
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://[::1]",  // IPv6 loopback
-        "http://host.docker.internal",
-        "http://staffdb",  // Docker compose service name
-    ];
-
-    if allowed_schemes.iter().any(|scheme| base_url.starts_with(scheme)) {
-        return Ok(());
+    if !environment.eq_ignore_ascii_case("development") {
+        return Err(AppError::Config(
+            "STAFFDB_BASE_URL must use HTTPS outside development".to_string(),
+        ));
     }
 
-    Err(AppError::Internal(
-        format!(
-            "Insecure or invalid transport to staffdb: {}. Development allows HTTPS, localhost, 127.0.0.1, [::1], host.docker.internal, or staffdb service name",
-            base_url
-        )
-    ))
+    let is_allowed_dev_http = parsed.scheme() == "http"
+        && matches!(
+            parsed.host_str(),
+            Some("localhost")
+                | Some("127.0.0.1")
+                | Some("::1")
+                | Some("[::1]")
+                | Some("host.docker.internal")
+                | Some("staffdb")
+        );
+
+    if is_allowed_dev_http {
+        Ok(())
+    } else {
+        Err(AppError::Config(
+            "STAFFDB_BASE_URL must use HTTPS or an approved development loopback/host"
+                .to_string(),
+        ))
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,4 +181,49 @@ pub async fn get_effective_permissions(
         .json::<EffectivePermissions>()
         .await
         .map_err(|e| AppError::Upstream(format!("invalid staffdb response: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_secure_url;
+
+    #[test]
+    fn staffdb_url_validation_allows_expected_development_hosts() {
+        for url in [
+            "https://staffdb.example.com",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://[::1]:3000",
+            "http://host.docker.internal:3000",
+            "http://staffdb:3000",
+        ] {
+            assert!(validate_secure_url(url, "development").is_ok(), "{url}");
+        }
+    }
+
+    #[test]
+    fn staffdb_url_validation_rejects_unapproved_hosts_and_schemes() {
+        for url in [
+            "http://example.com",
+            "ftp://staffdb.example.com",
+            "http://127.0.0.1.evil.com",
+            "http://127.0.0.1@evil.com",
+        ] {
+            assert!(validate_secure_url(url, "development").is_err(), "{url}");
+        }
+    }
+
+    #[test]
+    fn staffdb_url_validation_enforces_https_outside_development() {
+        assert!(validate_secure_url("https://staffdb.example.com", "production").is_ok());
+        assert!(validate_secure_url("http://localhost:3000", "production").is_err());
+        assert!(validate_secure_url("http://staffdb:3000", "Production").is_err());
+    }
+
+    #[test]
+    fn staffdb_url_validation_treats_development_case_insensitively() {
+        assert!(validate_secure_url("http://localhost:3000", "development").is_ok());
+        assert!(validate_secure_url("http://localhost:3000", "Development").is_ok());
+        assert!(validate_secure_url("http://localhost:3000", "DEVELOPMENT").is_ok());
+    }
 }
