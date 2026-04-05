@@ -185,11 +185,13 @@ fn validate_secure_staffdb_url(base_url: &str) -> Result<(), AppError> {
         .map_err(|_| AppError::Internal("Invalid staffdb base URL".to_string()))?;
 
     let is_https = parsed.scheme() == "https";
-    let is_loopback_http = parsed.scheme() == "http" && matches!(parsed.host_str(), Some("127.0.0.1"));
+    let is_allowed_dev_http = parsed.scheme() == "http"
+        && matches!(parsed.host_str(), Some("127.0.0.1") | Some("staffdb"));
 
-    if !is_https && !is_loopback_http {
+    if !is_https && !is_allowed_dev_http {
         return Err(AppError::Internal(
-            "Insecure transport to staffdb: must use HTTPS or http://127.0.0.1".to_string(),
+            "Insecure transport to staffdb: must use HTTPS, http://127.0.0.1, or http://staffdb"
+                .to_string(),
         ));
     }
     Ok(())
@@ -669,13 +671,14 @@ mod tests {
         assert!(validate_secure_staffdb_url("https://staffdb.example.com").is_ok());
         assert!(validate_secure_staffdb_url("https://staffdb.example.com/api").is_ok());
 
-        // HTTP loopback (127.0.0.1) is allowed as an explicit exception
+        // HTTP loopback (127.0.0.1) and local compose hostnames are allowed as explicit exceptions
         assert!(validate_secure_staffdb_url("http://127.0.0.1:3000").is_ok());
         assert!(validate_secure_staffdb_url("http://127.0.0.1/api/accounts").is_ok());
+        assert!(validate_secure_staffdb_url("http://staffdb:3000").is_ok());
+        assert!(validate_secure_staffdb_url("http://staffdb:3000/api/accounts").is_ok());
 
-        // Plain HTTP to non-loopback hosts is rejected
+        // Plain HTTP to non-local hosts is rejected
         assert!(validate_secure_staffdb_url("http://example.com").is_err());
-        assert!(validate_secure_staffdb_url("http://localhost:3000").is_err());
         assert!(validate_secure_staffdb_url("ftp://staffdb.example.com").is_err());
 
         // Crafted URLs that start with "127.0.0.1" in path or subdomain are rejected
