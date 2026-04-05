@@ -5,7 +5,7 @@ use crate::state::AppState;
 
 /// Validates that the staffdb base URL uses HTTPS (or approved dev loopbacks in development).
 /// Prevents cleartext transmission of sensitive data like account IDs.
-fn validate_secure_url(base_url: &str, environment: &str) -> Result<(), AppError> {
+pub(crate) fn validate_secure_url(base_url: &str, environment: &str) -> Result<(), AppError> {
     let parsed = reqwest::Url::parse(base_url)
         .map_err(|_| AppError::Config("STAFFDB_BASE_URL is not a valid URL".to_string()))?;
 
@@ -65,8 +65,10 @@ pub async fn lookup_account(
     email: Option<&str>,
     correlation_id: &str,
 ) -> Result<StaffAccount, AppError> {
-    validate_secure_url(&state.config.staffdb_base_url, &state.config.environment)?;
-    let mut url = format!("{}/api/accounts/lookup", state.config.staffdb_base_url.trim_end_matches('/'));
+    let mut url = state
+        .staffdb_base_url
+        .join("api/accounts/lookup")
+        .map_err(|_| AppError::Config("STAFFDB_BASE_URL is not a valid base URL".to_string()))?;
 
     let mut params = vec![];
     if let Some(v) = username {
@@ -82,7 +84,7 @@ pub async fn lookup_account(
 
     let query = serde_urlencoded::to_string(params)
         .map_err(|e| AppError::Internal(format!("failed to build staffdb query: {e}")))?;
-    url = format!("{url}?{query}");
+    url.set_query(Some(&query));
 
     let response = state
         .http_client
@@ -112,12 +114,10 @@ pub async fn get_account_by_id(
     account_id: &str,
     correlation_id: &str,
 ) -> Result<StaffAccount, AppError> {
-    validate_secure_url(&state.config.staffdb_base_url, &state.config.environment)?;
-    let url = format!(
-        "{}/api/accounts/{}",
-        state.config.staffdb_base_url.trim_end_matches('/'),
-        account_id
-    );
+    let url = state
+        .staffdb_base_url
+        .join(&format!("api/accounts/{account_id}"))
+        .map_err(|_| AppError::Config("STAFFDB_BASE_URL is not a valid base URL".to_string()))?;
 
     let response = state
         .http_client
@@ -150,12 +150,10 @@ pub async fn get_effective_permissions(
     account_id: &str,
     correlation_id: &str,
 ) -> Result<EffectivePermissions, AppError> {
-    validate_secure_url(&state.config.staffdb_base_url, &state.config.environment)?;
-    let url = format!(
-        "{}/api/rbac/accounts/{}/permissions/effective",
-        state.config.staffdb_base_url.trim_end_matches('/'),
-        account_id
-    );
+    let url = state
+        .staffdb_base_url
+        .join(&format!("api/rbac/accounts/{account_id}/permissions/effective"))
+        .map_err(|_| AppError::Config("STAFFDB_BASE_URL is not a valid base URL".to_string()))?;
 
     let response = state
         .http_client

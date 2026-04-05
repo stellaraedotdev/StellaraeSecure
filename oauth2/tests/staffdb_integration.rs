@@ -51,7 +51,7 @@ fn build_state(staffdb_base_url: String) -> AppState {
     AppState::new(Config {
         host: "127.0.0.1".parse().expect("host"),
         port: 4000,
-        environment: "test".to_string(),
+        environment: "development".to_string(),
         service_id: "oauth2-test".to_string(),
         log_level: "info".to_string(),
         database_url: "sqlite::memory:".to_string(),
