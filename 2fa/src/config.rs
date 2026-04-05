@@ -59,6 +59,19 @@ impl Config {
         let staffdb_base_url = optional_non_empty("STAFFDB_BASE_URL");
         let staffdb_api_key = optional_non_empty("STAFFDB_API_KEY");
 
+        // Validate HTTPS for staffdb_base_url if set (except for localhost in dev)
+        if let Some(ref url) = staffdb_base_url {
+            if !url.starts_with("https://") && !url.starts_with("http://127.0.0.1") {
+                return Err(ConfigError::InvalidVar {
+                    name: "STAFFDB_BASE_URL",
+                    value: format!(
+                        "{}. Must use HTTPS (https://) or localhost (http://127.0.0.1)",
+                        url
+                    ),
+                });
+            }
+        }
+
         Ok(Self {
             host,
             port,

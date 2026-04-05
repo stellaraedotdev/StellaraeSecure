@@ -178,6 +178,17 @@ fn assert_api_key(state: &AppState, headers: &HeaderMap) -> Result<(), AppError>
     Ok(())
 }
 
+/// Validates that the staffdb base URL uses HTTPS (or is localhost in dev).
+/// Prevents cleartext transmission of sensitive data like account IDs.
+fn validate_secure_staffdb_url(base_url: &str) -> Result<(), AppError> {
+    if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
+        return Err(AppError::Internal(
+            format!("Insecure transport to staffdb: {} does not use HTTPS or localhost", base_url)
+        ));
+    }
+    Ok(())
+}
+
 async fn ensure_account_exists(state: &AppState, account_id: &str) -> Result<(), AppError> {
     if Uuid::parse_str(account_id).is_err() {
         return Err(AppError::Validation("Invalid account ID format".to_string()));
@@ -189,6 +200,8 @@ async fn ensure_account_exists(state: &AppState, account_id: &str) -> Result<(),
     let Some(staffdb_api_key) = state.config.staffdb_api_key.as_deref() else {
         return Ok(());
     };
+
+    validate_secure_staffdb_url(staffdb_base_url)?;
 
     let url = format!(
         "{}/api/accounts/{}",
