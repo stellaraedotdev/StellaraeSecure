@@ -24,7 +24,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [oauth2, staffdb, 2fa]
+        include:
+          - service: oauth2
+            audit_args: ''
+          - service: 2fa
+            # RUSTSEC-2023-0071: rsa Marvin Attack via sqlx-mysql (optional dep,
+            # never compiled; only SQLite is used). No upstream patch available.
+            audit_args: --ignore RUSTSEC-2023-0071
+          - service: staffdb
+            # RUSTSEC-2023-0071: rsa Marvin Attack via sqlx-mysql (optional dep,
+            # never compiled; only SQLite is used). No upstream patch available.
+            audit_args: --ignore RUSTSEC-2023-0071
 
     defaults:
       run:
@@ -41,7 +51,7 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Audit dependencies
-        run: cargo audit --config audit.toml
+        run: cargo audit ${{ matrix.audit_args }}
 
   trivy-fs:
     runs-on: ubuntu-latest
