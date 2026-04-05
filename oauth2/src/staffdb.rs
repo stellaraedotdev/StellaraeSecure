@@ -12,6 +12,8 @@ pub struct StaffAccount {
     pub account_type: String,
     #[serde(default)]
     pub two_factor_enabled: bool,
+    #[serde(default)]
+    pub hsk_enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]

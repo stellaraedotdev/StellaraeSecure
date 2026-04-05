@@ -70,8 +70,9 @@
 
         <h2>Second-factor policy</h2>
         <p>
-          Critical admin actions currently require two_factor_enabled=true from staffdb account
-          records, backed by bootstrap TOTP enrollment/verification APIs.
+          Critical admin actions require second-factor readiness from staffdb account records:
+          either TOTP (<code>two_factor_enabled=true</code>) or hardware key bootstrap
+          (<code>hsk_enabled=true</code>) satisfies the policy.
         </p>
       </section>
     </main>

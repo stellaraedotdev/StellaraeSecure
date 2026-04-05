@@ -363,7 +363,23 @@
               <td>/api/2fa/status/{account_id}</td>
               <td>Authorization</td>
               <td>None</td>
-              <td>{account_id, two_factor_enabled, method?}</td>
+              <td>{account_id, two_factor_enabled, hsk_enabled, method?}</td>
+              <td><span class="status-badge">200</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/2fa/hsk/{account_id}/challenge</td>
+              <td>Authorization</td>
+              <td>{credential_id, label?}</td>
+              <td>{account_id, credential_id, challenge, expires_at}</td>
+              <td><span class="status-badge">201</span></td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>/api/2fa/hsk/{account_id}/verify</td>
+              <td>Authorization</td>
+              <td>{credential_id, challenge, assertion}</td>
+              <td>{account_id, two_factor_enabled, hsk_enabled, method?}</td>
               <td><span class="status-badge">200</span></td>
             </tr>
           </tbody>
@@ -383,6 +399,10 @@ x-staff-identity-ts: &lt;unix-seconds&gt;
 x-staff-identity-sig: &lt;hex-hmac-sha256(account_id:timestamp)&gt;
 x-correlation-id: &lt;optional-trace-id&gt;
 x-panel-session-id: &lt;required-on-high-risk-operations&gt;</code></pre>
+        <p class="small-note">
+          For high-assurance admin operations, second-factor requirement is satisfied when either
+          <code>two_factor_enabled</code> (TOTP) or <code>hsk_enabled</code> is true on the staff account.
+        </p>
 
         <h3>Health Endpoints</h3>
         <table>

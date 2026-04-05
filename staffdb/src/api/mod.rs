@@ -75,6 +75,14 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::twofa::verify_totp),
         )
         .route(
+            "/2fa/hsk/:account_id/challenge",
+            post(handlers::twofa::start_hsk_challenge),
+        )
+        .route(
+            "/2fa/hsk/:account_id/verify",
+            post(handlers::twofa::verify_hsk_challenge),
+        )
+        .route(
             "/2fa/status/:account_id",
             get(handlers::twofa::get_2fa_status),
         )

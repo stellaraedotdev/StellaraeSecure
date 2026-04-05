@@ -308,7 +308,7 @@ async fn register_client(
     let owner_account_id = admin.actor_account_id.clone();
     let owner_account =
         staffdb::get_account_by_id(&state, &owner_account_id, &admin.correlation_id).await?;
-    if !owner_account.two_factor_enabled {
+    if !(owner_account.two_factor_enabled || owner_account.hsk_enabled) {
         return Err(AppError::Authorization);
     }
 
@@ -918,7 +918,7 @@ async fn issue_panel_session(
     if !account.is_active || account.account_type != "staff" {
         return Err(AppError::Authorization);
     }
-    if !account.two_factor_enabled {
+    if !(account.two_factor_enabled || account.hsk_enabled) {
         return Err(AppError::Authorization);
     }
 

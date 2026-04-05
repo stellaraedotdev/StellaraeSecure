@@ -29,6 +29,9 @@ pub struct Account {
     /// Whether this account has an enrolled and verified second factor
     pub two_factor_enabled: bool,
 
+    /// Whether this account has an enrolled and verified hardware security key
+    pub hsk_enabled: bool,
+
     /// Creation timestamp (UTC)
     pub created_at: DateTime<Utc>,
 
@@ -210,5 +213,27 @@ pub struct TotpEnrollResponse {
 pub struct TotpStatusResponse {
     pub account_id: String,
     pub two_factor_enabled: bool,
+    pub hsk_enabled: bool,
     pub method: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EnrollHskChallengeRequest {
+    pub credential_id: String,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HskChallengeResponse {
+    pub account_id: String,
+    pub credential_id: String,
+    pub challenge: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyHskRequest {
+    pub credential_id: String,
+    pub challenge: String,
+    pub assertion: String,
 }

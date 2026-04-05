@@ -16,7 +16,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     create_rbac_role_permissions_table(pool).await?;
     create_rbac_account_roles_table(pool).await?;
     ensure_accounts_two_factor_column(pool).await?;
+    ensure_accounts_hsk_enabled_column(pool).await?;
     create_account_totp_factors_table(pool).await?;
+    create_account_hsk_factors_table(pool).await?;
     seed_system_rbac_roles(pool).await?;
     seed_oauth2_permissions(pool).await?;
 
@@ -69,6 +71,60 @@ async fn create_account_totp_factors_table(pool: &SqlitePool) -> Result<()> {
     .await?;
 
     tracing::info!("Account TOTP factor table created/verified");
+    Ok(())
+}
+
+async fn ensure_accounts_hsk_enabled_column(pool: &SqlitePool) -> Result<()> {
+    match sqlx::query("ALTER TABLE accounts ADD COLUMN hsk_enabled BOOLEAN NOT NULL DEFAULT false")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => {
+            tracing::info!("accounts.hsk_enabled column added");
+        }
+        Err(sqlx::Error::Database(error)) if error.message().contains("duplicate column name") => {
+            tracing::debug!("accounts.hsk_enabled column already exists");
+        }
+        Err(error) => return Err(error.into()),
+    }
+
+    Ok(())
+}
+
+async fn create_account_hsk_factors_table(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS account_hsk_factors (
+            account_id TEXT NOT NULL,
+            credential_id TEXT NOT NULL,
+            label TEXT,
+            challenge TEXT,
+            challenge_expires_at DATETIME,
+            is_confirmed BOOLEAN NOT NULL DEFAULT false,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            last_verified_at DATETIME,
+            PRIMARY KEY (account_id, credential_id),
+            FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_account_hsk_account ON account_hsk_factors(account_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_account_hsk_confirmed ON account_hsk_factors(is_confirmed)",
+    )
+    .execute(pool)
+    .await?;
+
+    tracing::info!("Account HSK factor table created/verified");
     Ok(())
 }
 
