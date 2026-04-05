@@ -22,9 +22,13 @@ pub async fn get_2fa_status(
         .as_deref()
         .ok_or_else(|| AppError::Config("TWOFA_BASE_URL is not configured".to_string()))?;
 
-    if !base_url.to_lowercase().starts_with("https://") {
+    let is_https = base_url.to_lowercase().starts_with("https://");
+    let is_http = base_url.to_lowercase().starts_with("http://");
+    let is_development = state.config.environment.eq_ignore_ascii_case("development");
+
+    if !is_https && !(is_development && is_http) {
         return Err(AppError::Config(
-            "TWOFA_BASE_URL must use HTTPS to protect 2FA data in transit".to_string(),
+            "TWOFA_BASE_URL must use HTTPS outside development; HTTP is only allowed when environment is development".to_string(),
         ));
     }
 
