@@ -22,6 +22,12 @@ pub async fn get_2fa_status(
         .as_deref()
         .ok_or_else(|| AppError::Config("TWOFA_BASE_URL is not configured".to_string()))?;
 
+    if !base_url.to_lowercase().starts_with("https://") {
+        return Err(AppError::Config(
+            "TWOFA_BASE_URL must use HTTPS to protect 2FA data in transit".to_string(),
+        ));
+    }
+
     let api_key = state
         .config
         .twofa_api_key
