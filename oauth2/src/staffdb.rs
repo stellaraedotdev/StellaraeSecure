@@ -3,15 +3,39 @@ use serde::Deserialize;
 use crate::error::AppError;
 use crate::state::AppState;
 
-/// Validates that the staffdb base URL uses HTTPS (or is localhost in dev).
+/// Validates that the staffdb base URL uses HTTPS (or approved dev loopbacks in development).
 /// Prevents cleartext transmission of sensitive data like account IDs.
-fn validate_secure_url(base_url: &str) -> Result<(), AppError> {
-    if !base_url.starts_with("https://") && !base_url.starts_with("http://127.0.0.1") {
-        return Err(AppError::Internal(
-            format!("Insecure transport to staffdb: {} does not use HTTPS or localhost", base_url)
-        ));
+fn validate_secure_url(base_url: &str, environment: &str) -> Result<(), AppError> {
+    // Production: Always require HTTPS
+    if environment != "development" {
+        if !base_url.starts_with("https://") {
+            return Err(AppError::Internal(
+                format!("Insecure transport to staffdb: {} does not use HTTPS in {} environment", base_url, environment)
+            ));
+        }
+        return Ok(());
     }
-    Ok(())
+
+    // Development: Allow HTTPS, localhost variants, and docker service names
+    let allowed_schemes = [
+        "https://",
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://[::1]",  // IPv6 loopback
+        "http://host.docker.internal",
+        "http://staffdb",  // Docker compose service name
+    ];
+
+    if allowed_schemes.iter().any(|scheme| base_url.starts_with(scheme)) {
+        return Ok(());
+    }
+
+    Err(AppError::Internal(
+        format!(
+            "Insecure or invalid transport to staffdb: {}. Development allows HTTPS, localhost, 127.0.0.1, [::1], host.docker.internal, or staffdb service name",
+            base_url
+        )
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,7 +63,7 @@ pub async fn lookup_account(
     email: Option<&str>,
     correlation_id: &str,
 ) -> Result<StaffAccount, AppError> {
-    validate_secure_url(&state.config.staffdb_base_url)?;
+    validate_secure_url(&state.config.staffdb_base_url, &state.config.environment)?;
     let mut url = format!("{}/api/accounts/lookup", state.config.staffdb_base_url.trim_end_matches('/'));
 
     let mut params = vec![];
@@ -86,7 +110,7 @@ pub async fn get_account_by_id(
     account_id: &str,
     correlation_id: &str,
 ) -> Result<StaffAccount, AppError> {
-    validate_secure_url(&state.config.staffdb_base_url)?;
+    validate_secure_url(&state.config.staffdb_base_url, &state.config.environment)?;
     let url = format!(
         "{}/api/accounts/{}",
         state.config.staffdb_base_url.trim_end_matches('/'),
@@ -124,7 +148,7 @@ pub async fn get_effective_permissions(
     account_id: &str,
     correlation_id: &str,
 ) -> Result<EffectivePermissions, AppError> {
-    validate_secure_url(&state.config.staffdb_base_url)?;
+    validate_secure_url(&state.config.staffdb_base_url, &state.config.environment)?;
     let url = format!(
         "{}/api/rbac/accounts/{}/permissions/effective",
         state.config.staffdb_base_url.trim_end_matches('/'),
