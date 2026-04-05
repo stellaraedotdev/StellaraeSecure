@@ -41,7 +41,7 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Audit dependencies
-        run: cargo audit
+        run: cargo audit --config audit.toml
 
   trivy-fs:
     runs-on: ubuntu-latest
