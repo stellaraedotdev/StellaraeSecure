@@ -26,6 +26,7 @@ pub struct AccountResponse {
     pub email: String,
     pub is_active: bool,
     pub account_type: String,
+    pub two_factor_enabled: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -38,6 +39,7 @@ impl From<Account> for AccountResponse {
             email: account.email,
             is_active: account.is_active,
             account_type: account.account_type,
+            two_factor_enabled: account.two_factor_enabled,
             created_at: account.created_at.to_rfc3339(),
             updated_at: account.updated_at.to_rfc3339(),
         }

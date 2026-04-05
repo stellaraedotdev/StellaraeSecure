@@ -33,10 +33,13 @@ Two independent instances:
 - Public metadata (optional account attributes)
 
 **What staffdb DOES NOT store** (isolated in other services):
-- 2FA secrets (TOTP codes, backup codes) → stored in `2fa` service
 - Hardware security key private material → stored in `hsm` service
 - OAuth2 tokens or refresh tokens → generated/stored in `oauth2` service
 - Session state → managed by caller (OAuth2, admin, etc.)
+
+Current rollout note:
+- staffdb now includes a bootstrap TOTP enrollment/verification API used by oauth2 policy checks.
+- This is a transitional implementation until the dedicated `2fa` service is split out.
 
 ### Data Flow
 
@@ -104,6 +107,19 @@ GET /audit/accounts/{user_id}
   Retrieve immutable audit log for an account
 ```
 
+### 2FA (TOTP Bootstrap)
+
+```
+POST /2fa/totp/{account_id}/enroll
+  Generate or reset TOTP enrollment secret for an account
+
+POST /2fa/totp/{account_id}/verify
+  Verify a 6-digit TOTP code and enable two_factor_enabled on the account
+
+GET /2fa/status/{account_id}
+  Return whether two-factor is enabled
+```
+
 ## Local Development
 
 ### Prerequisites
@@ -141,6 +157,21 @@ GET /audit/accounts/{user_id}
    ```bash
    curl http://127.0.0.1:3000/healthz
    ```
+
+### Docker / Compose
+
+- `staffdb/Dockerfile` builds a runtime image for this service.
+- For single-service testing from this directory:
+
+```bash
+docker compose up -d --build
+```
+
+- For full ecosystem integration (`staffdb` + `oauth2` + `admin`), use the repository root compose stack:
+
+```bash
+docker compose --env-file ../.env.compose -f ../docker-compose.yml up -d --build
+```
 
 ### Environment Variables
 

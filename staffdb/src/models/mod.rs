@@ -26,6 +26,9 @@ pub struct Account {
     /// Account type: 'staff' or 'user'
     pub account_type: String,
 
+    /// Whether this account has an enrolled and verified second factor
+    pub two_factor_enabled: bool,
+
     /// Creation timestamp (UTC)
     pub created_at: DateTime<Utc>,
 
@@ -184,4 +187,28 @@ pub struct ApiResponse<T> {
     pub data: Option<T>,
     pub error: Option<String>,
     pub status: u16,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EnrollTotpRequest {
+    pub issuer: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyTotpRequest {
+    pub code: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TotpEnrollResponse {
+    pub account_id: String,
+    pub secret_base32: String,
+    pub otpauth_uri: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TotpStatusResponse {
+    pub account_id: String,
+    pub two_factor_enabled: bool,
+    pub method: Option<String>,
 }

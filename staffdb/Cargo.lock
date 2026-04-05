@@ -349,6 +349,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-encoding"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -410,7 +416,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1919,13 +1925,16 @@ dependencies = [
  "axum",
  "chacha20poly1305",
  "chrono",
+ "data-encoding",
  "dotenvy",
  "governor",
  "hex",
+ "hmac",
  "rand 0.8.5",
  "regex",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
  "sqlx",
  "thiserror 1.0.69",

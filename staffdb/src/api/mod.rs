@@ -64,6 +64,20 @@ pub fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/rbac/accounts/:account_id/permissions/effective",
             get(handlers::rbac::get_effective_permissions),
         )
+
+        // 2FA endpoints
+        .route(
+            "/2fa/totp/:account_id/enroll",
+            post(handlers::twofa::enroll_totp),
+        )
+        .route(
+            "/2fa/totp/:account_id/verify",
+            post(handlers::twofa::verify_totp),
+        )
+        .route(
+            "/2fa/status/:account_id",
+            get(handlers::twofa::get_2fa_status),
+        )
         
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

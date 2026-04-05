@@ -166,6 +166,7 @@ impl AccountRepository for SqliteAccountRepository {
             password_hash: Some(password_hash.to_string()),
             is_active: true,
             account_type: account_type.to_string(),
+            two_factor_enabled: false,
             created_at: now,
             updated_at: now,
         })
@@ -174,7 +175,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_account(&self, account_id: &str) -> Result<Option<Account>> {
         let row = sqlx::query(
             r#"
-            SELECT id, username, email, password_hash, is_active, account_type, created_at, updated_at
+            SELECT id, username, email, password_hash, is_active, account_type, two_factor_enabled, created_at, updated_at
             FROM accounts
             WHERE id = ?
             "#,
@@ -190,6 +191,7 @@ impl AccountRepository for SqliteAccountRepository {
             password_hash: r.get("password_hash"),
             is_active: r.get("is_active"),
             account_type: r.get("account_type"),
+            two_factor_enabled: r.get("two_factor_enabled"),
             created_at: r.get("created_at"),
             updated_at: r.get("updated_at"),
         }))
@@ -198,7 +200,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_account_by_username(&self, username: &str) -> Result<Option<Account>> {
         let row = sqlx::query(
             r#"
-            SELECT id, username, email, password_hash, is_active, account_type, created_at, updated_at
+            SELECT id, username, email, password_hash, is_active, account_type, two_factor_enabled, created_at, updated_at
             FROM accounts
             WHERE username = ?
             "#,
@@ -214,6 +216,7 @@ impl AccountRepository for SqliteAccountRepository {
             password_hash: r.get("password_hash"),
             is_active: r.get("is_active"),
             account_type: r.get("account_type"),
+            two_factor_enabled: r.get("two_factor_enabled"),
             created_at: r.get("created_at"),
             updated_at: r.get("updated_at"),
         }))
@@ -222,7 +225,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_account_by_email(&self, email: &str) -> Result<Option<Account>> {
         let row = sqlx::query(
             r#"
-            SELECT id, username, email, password_hash, is_active, account_type, created_at, updated_at
+            SELECT id, username, email, password_hash, is_active, account_type, two_factor_enabled, created_at, updated_at
             FROM accounts
             WHERE email = ?
             "#,
@@ -238,6 +241,7 @@ impl AccountRepository for SqliteAccountRepository {
             password_hash: r.get("password_hash"),
             is_active: r.get("is_active"),
             account_type: r.get("account_type"),
+            two_factor_enabled: r.get("two_factor_enabled"),
             created_at: r.get("created_at"),
             updated_at: r.get("updated_at"),
         }))
@@ -272,7 +276,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn list_accounts(&self, limit: i32, offset: i32) -> Result<Vec<Account>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, username, email, password_hash, is_active, account_type, created_at, updated_at
+            SELECT id, username, email, password_hash, is_active, account_type, two_factor_enabled, created_at, updated_at
             FROM accounts
             LIMIT ? OFFSET ?
             "#,
@@ -291,6 +295,7 @@ impl AccountRepository for SqliteAccountRepository {
                 password_hash: r.get("password_hash"),
                 is_active: r.get("is_active"),
                 account_type: r.get("account_type"),
+                two_factor_enabled: r.get("two_factor_enabled"),
                 created_at: r.get("created_at"),
                 updated_at: r.get("updated_at"),
             })

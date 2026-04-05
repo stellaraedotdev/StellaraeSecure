@@ -10,6 +10,8 @@ pub struct StaffAccount {
     pub email: String,
     pub is_active: bool,
     pub account_type: String,
+    #[serde(default)]
+    pub two_factor_enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]

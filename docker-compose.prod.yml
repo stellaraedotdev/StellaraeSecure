@@ -1,0 +1,16 @@
+services:
+  staffdb:
+    platform: linux/amd64
+    environment:
+      ENVIRONMENT: production
+      LOG_LEVEL: warn
+
+  oauth2:
+    platform: linux/amd64
+    environment:
+      ENVIRONMENT: production
+      LOG_LEVEL: warn
+      OAUTH2_PERMISSION_ENFORCEMENT_MODE: enforce
+
+  admin:
+    platform: linux/amd64

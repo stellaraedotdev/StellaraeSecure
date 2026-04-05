@@ -5,8 +5,8 @@ FROM rust:1.86 as builder
 
 WORKDIR /build
 
-# Copy Cargo files
-COPY Cargo.toml Cargo.lock ./
+# Copy Cargo manifest
+COPY Cargo.toml ./
 
 # Copy source code
 COPY src src/
@@ -19,22 +19,11 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies (minimal)
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    curl \
-    sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy binary from builder
 COPY --from=builder /build/target/release/staffdb /app/staffdb
 
 # Create directory for SQLite database
 RUN mkdir -p /app/data
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/healthz || exit 1
 
 # Expose port
 EXPOSE 3000

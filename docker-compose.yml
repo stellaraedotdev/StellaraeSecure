@@ -1,0 +1,95 @@
+services:
+  staffdb:
+    build:
+      context: ./staffdb
+      dockerfile: Dockerfile
+    platform: ${STELLARAE_DOCKER_PLATFORM:-linux/amd64}
+    container_name: stellarae-staffdb
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      STAFFDB_HOST: 0.0.0.0
+      STAFFDB_PORT: 3000
+      DATABASE_URL: sqlite:/app/data/staffdb.sqlite
+      SERVICE_ID: staffdb
+      ENVIRONMENT: ${STELLARAE_ENVIRONMENT:-development}
+      LOG_LEVEL: ${STELLARAE_LOG_LEVEL:-info}
+      SERVICE_API_KEYS: oauth2:${STAFFDB_OAUTH2_API_KEY:-dev-oauth2-staffdb-key},admin:${STAFFDB_ADMIN_API_KEY:-dev-admin-staffdb-key},staffdb:${STAFFDB_INTERNAL_API_KEY:-dev-staffdb-internal-key}
+      PRIVILEGED_SERVICES: oauth2,admin,staffdb
+    volumes:
+      - staffdb-data:/app/data
+    networks:
+      - stellarae
+
+  oauth2:
+    build:
+      context: ./oauth2
+      dockerfile: Dockerfile
+    platform: ${STELLARAE_DOCKER_PLATFORM:-linux/amd64}
+    container_name: stellarae-oauth2
+    restart: unless-stopped
+    depends_on:
+      staffdb:
+        condition: service_started
+    ports:
+      - "4000:4000"
+    environment:
+      OAUTH2_HOST: 0.0.0.0
+      OAUTH2_PORT: 4000
+      OAUTH2_ISSUER: ${OAUTH2_ISSUER:-https://secure.stellarae.org/oauth2/public}
+      SERVICE_ID: oauth2
+      ENVIRONMENT: ${STELLARAE_ENVIRONMENT:-development}
+      LOG_LEVEL: ${STELLARAE_LOG_LEVEL:-info}
+      DATABASE_URL: sqlite:/app/data/oauth2.sqlite
+      OAUTH2_ADMIN_API_KEY: ${OAUTH2_ADMIN_API_KEY:-dev-admin-key-change-me}
+      STAFFDB_BASE_URL: http://staffdb:3000
+      STAFFDB_API_KEY: ${STAFFDB_OAUTH2_API_KEY:-dev-oauth2-staffdb-key}
+      OAUTH2_STAFF_IDENTITY_HMAC_SECRET: ${OAUTH2_STAFF_IDENTITY_HMAC_SECRET:-dev-shared-hmac-secret-change-me}
+      OAUTH2_PERMISSION_ENFORCEMENT_MODE: ${OAUTH2_PERMISSION_ENFORCEMENT_MODE:-observe}
+      OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS: ${OAUTH2_STAFF_IDENTITY_MAX_SKEW_SECONDS:-120}
+      OAUTH2_PANEL_SESSION_TTL_SECONDS: ${OAUTH2_PANEL_SESSION_TTL_SECONDS:-900}
+      OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS: ${OAUTH2_STEPUP_SESSION_FRESHNESS_SECONDS:-300}
+    volumes:
+      - oauth2-data:/app/data
+    networks:
+      - stellarae
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+      args:
+        VITE_OAUTH2_API_BASE_URL: ${VITE_OAUTH2_API_BASE_URL:-http://localhost:4000}
+        VITE_STAFFDB_API_BASE_URL: ${VITE_STAFFDB_API_BASE_URL:-http://localhost:3000}
+        VITE_AUTH_HANDOFF_START_URL: ${VITE_AUTH_HANDOFF_START_URL:-http://localhost:3000/auth/start?return_to=http://localhost:8080/auth/callback}
+        VITE_ALLOW_BOOTSTRAP_LOGIN: ${VITE_ALLOW_BOOTSTRAP_LOGIN:-false}
+        VITE_AUTH_HANDOFF_REQUIRE_STATE: ${VITE_AUTH_HANDOFF_REQUIRE_STATE:-true}
+        VITE_AUTH_HANDOFF_MAX_SKEW_SECONDS: ${VITE_AUTH_HANDOFF_MAX_SKEW_SECONDS:-300}
+        VITE_PERSIST_SENSITIVE_SESSION_FIELDS: ${VITE_PERSIST_SENSITIVE_SESSION_FIELDS:-false}
+    platform: ${STELLARAE_DOCKER_PLATFORM:-linux/amd64}
+    container_name: stellarae-admin
+    restart: unless-stopped
+    depends_on:
+      oauth2:
+        condition: service_started
+    ports:
+      - "8080:80"
+    networks:
+      - stellarae
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  stellarae:
+    driver: bridge
+
+volumes:
+  staffdb-data:
+    driver: local
+  oauth2-data:
+    driver: local

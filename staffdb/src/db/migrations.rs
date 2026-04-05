@@ -15,10 +15,60 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     create_rbac_permissions_table(pool).await?;
     create_rbac_role_permissions_table(pool).await?;
     create_rbac_account_roles_table(pool).await?;
+    ensure_accounts_two_factor_column(pool).await?;
+    create_account_totp_factors_table(pool).await?;
     seed_system_rbac_roles(pool).await?;
     seed_oauth2_permissions(pool).await?;
 
     tracing::info!("Migrations completed successfully");
+    Ok(())
+}
+
+async fn ensure_accounts_two_factor_column(pool: &SqlitePool) -> Result<()> {
+    match sqlx::query(
+        "ALTER TABLE accounts ADD COLUMN two_factor_enabled BOOLEAN NOT NULL DEFAULT false",
+    )
+    .execute(pool)
+    .await
+    {
+        Ok(_) => {
+            tracing::info!("accounts.two_factor_enabled column added");
+        }
+        Err(sqlx::Error::Database(error))
+            if error.message().contains("duplicate column name") =>
+        {
+            tracing::debug!("accounts.two_factor_enabled column already exists");
+        }
+        Err(error) => return Err(error.into()),
+    }
+
+    Ok(())
+}
+
+async fn create_account_totp_factors_table(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS account_totp_factors (
+            account_id TEXT PRIMARY KEY,
+            secret_base32 TEXT NOT NULL,
+            is_confirmed BOOLEAN NOT NULL DEFAULT false,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            last_verified_at DATETIME,
+            FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_account_totp_confirmed ON account_totp_factors(is_confirmed)",
+    )
+    .execute(pool)
+    .await?;
+
+    tracing::info!("Account TOTP factor table created/verified");
     Ok(())
 }
 

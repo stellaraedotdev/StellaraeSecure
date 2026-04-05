@@ -1,0 +1,73 @@
+name: Containers CI
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'docker-compose.prod.yml'
+      - '.env.compose.example'
+      - 'admin/Dockerfile'
+      - 'admin/nginx.conf'
+      - 'oauth2/Dockerfile'
+      - 'staffdb/Dockerfile'
+      - '.github/workflows/containers-ci.yml'
+  push:
+    paths:
+      - 'docker-compose.yml'
+      - 'docker-compose.prod.yml'
+      - '.env.compose.example'
+      - 'admin/Dockerfile'
+      - 'admin/nginx.conf'
+      - 'oauth2/Dockerfile'
+      - 'staffdb/Dockerfile'
+      - '.github/workflows/containers-ci.yml'
+
+jobs:
+  compose-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose files
+        run: |
+          cp .env.compose.example .env.compose
+          docker compose --env-file .env.compose -f docker-compose.yml config
+          docker compose --env-file .env.compose -f docker-compose.yml -f docker-compose.prod.yml config
+
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: staffdb
+            context: staffdb
+            dockerfile: staffdb/Dockerfile
+          - name: oauth2
+            context: oauth2
+            dockerfile: oauth2/Dockerfile
+          - name: admin
+            context: admin
+            dockerfile: admin/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build multi-arch image (no push)
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --file ${{ matrix.dockerfile }} \
+            --tag stellarae/${{ matrix.name }}:ci \
+            --provenance=false \
+            --sbom=false \
+            --output=type=cacheonly \
+            ${{ matrix.context }}

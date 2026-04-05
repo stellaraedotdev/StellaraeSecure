@@ -16,7 +16,7 @@ StellaraeSecure is a group of projects in a unified repository, each project can
 - `oauth2`: The OAuth2 server
 - `lib`: The shared libraries for public stellarae applications
 - `2fa`: The 2FA system (Server, client libraries are in `lib`)
-- `hsm`: The hardware security key support (Server (generation and validation), client libraries are in `lib`)
+- `hsk`: The hardware security key support (Server (generation and validation), client libraries are in `lib`)
 - `admin`: The admin panel for managing staff accounts, 2FA, and hardware security keys.
 - `docs`: A GitHub pages site for documentation and guides on how to use and integrate with StellaraeSecure.
 
@@ -36,6 +36,10 @@ There is no way to directly use the official 2FA system.
 
 There is no public API for our 2FA system, but you can run your own server and use the client libraries in `lib` to integrate with it.
 
+Current implementation status:
+- A bootstrap internal TOTP enrollment/verification path is now available in `staffdb` for service-to-service usage.
+- Dedicated standalone `2fa` and `hsk` services remain planned and will absorb this logic in a later extraction phase.
+
 ## Architecture
 StellaraeSecure is built using a microservices architecture, with each project being its own service that can be deployed and scaled independently. The services communicate with each other using REST APIs, and all data is stored in a central database.
 
@@ -43,6 +47,67 @@ The 2FA server cannot obtain any personal information, and the OAuth2 server can
 
 ### Overkill?
 Probably, but hey, at least it's (hopefully) secure.
+
+## Containerized Deployment
+
+The repository now includes a root multi-service Docker Compose stack for:
+- `staffdb` on port `3000`
+- `oauth2` on port `4000`
+- `admin` on port `8080`
+
+### Quick start (live-deployment testing)
+
+1. Copy the compose environment template:
+
+```bash
+cp .env.compose.example .env.compose
+```
+
+2. Start the full stack:
+
+```bash
+docker compose --env-file .env.compose up -d --build
+```
+
+3. Verify service health:
+
+```bash
+curl http://127.0.0.1:3000/healthz
+curl http://127.0.0.1:4000/healthz
+curl http://127.0.0.1:8080/healthz
+```
+
+4. Stop the stack:
+
+```bash
+docker compose down
+```
+
+### Architecture targeting
+
+- The default compose platform is controlled by `STELLARAE_DOCKER_PLATFORM`.
+- For ARM/RISC test devices, set this to `linux/arm64` or `linux/riscv64` (when supported by the host toolchain/base images).
+- For AMD64/x86_64 production simulation, use:
+
+```bash
+STELLARAE_DOCKER_PLATFORM=linux/amd64 docker compose --env-file .env.compose up -d --build
+```
+
+You can also apply production defaults (enforced permission mode + amd64 platform) with:
+
+```bash
+docker compose --env-file .env.compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+### Multi-arch image build (for registries)
+
+Build and publish multi-platform images with Docker Buildx:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -f staffdb/Dockerfile -t ghcr.io/<org>/stellarae-staffdb:latest staffdb --push
+docker buildx build --platform linux/amd64,linux/arm64 -f oauth2/Dockerfile -t ghcr.io/<org>/stellarae-oauth2:latest oauth2 --push
+docker buildx build --platform linux/amd64,linux/arm64 -f admin/Dockerfile -t ghcr.io/<org>/stellarae-admin:latest admin --push
+```
 
 ## Contributing
 While contributions are welcome, we ask that you understand that it can take a long amount of time for a PR to be reviewed and merged. The sensitive nature of this project means that we have to be very careful about what code we merge, and we have to thoroughly review every line of code that is added to the project.

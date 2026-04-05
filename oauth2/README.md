@@ -135,6 +135,12 @@ Current operation keys:
 - `panel.session.issue` for issuing panel sessions
 - `panel.session.verify` for validating panel sessions
 
+2FA policy integration:
+
+- oauth2 now reads `two_factor_enabled` from staffdb account records.
+- `POST /api/admin/clients` requires `two_factor_enabled=true` for the actor.
+- `POST /api/panel/session` requires `two_factor_enabled=true` for the actor.
+
 Client ownership model:
 
 - Client registration assigns ownership to `x-staff-account-id`.
@@ -224,3 +230,31 @@ These will be resolved during implementation:
 ## Next Step
 
 Create the crate scaffold, define the configuration surface, and wire the first health-check server path in Rust.
+
+## Containerization
+
+This service now includes a production-ready Dockerfile in `oauth2/Dockerfile`.
+
+### Build locally
+
+```bash
+docker build -t stellarae-oauth2:local .
+```
+
+### Run locally
+
+```bash
+docker run --rm -p 4000:4000 \
+	-e DATABASE_URL=sqlite:/app/data/oauth2.sqlite \
+	-e OAUTH2_ADMIN_API_KEY=dev-admin-key-change-me \
+	-e STAFFDB_API_KEY=dev-oauth2-staffdb-key \
+	-e OAUTH2_STAFF_IDENTITY_HMAC_SECRET=dev-shared-hmac-secret-change-me \
+	-e STAFFDB_BASE_URL=http://host.docker.internal:3000 \
+	stellarae-oauth2:local
+```
+
+For full integration with `staffdb` and `admin`, use the root compose stack:
+
+```bash
+docker compose --env-file ../.env.compose -f ../docker-compose.yml up -d --build
+```

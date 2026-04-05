@@ -5,3 +5,4 @@ pub mod accounts;
 pub mod roles;
 pub mod audit;
 pub mod rbac;
+pub mod twofa;

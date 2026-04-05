@@ -49,6 +49,28 @@ npm run dev
 - `npm run test:e2e` runs Playwright smoke tests
 - `npm run build` creates production build output
 
+## Containerization
+
+The admin frontend now includes a Dockerfile and nginx runtime configuration.
+
+### Build locally
+
+```bash
+docker build -t stellarae-admin:local .
+```
+
+### Run locally
+
+```bash
+docker run --rm -p 8080:80 stellarae-admin:local
+```
+
+For full stack testing with backend services, use the root compose stack:
+
+```bash
+docker compose --env-file ../.env.compose -f ../docker-compose.yml up -d --build
+```
+
 ## Auth Handoff
 
 - `/login` is now an entry point that redirects users to upstream staff auth.
