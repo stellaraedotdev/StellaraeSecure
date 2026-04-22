@@ -338,5 +338,4 @@ components:
         hsk_enabled:
           type: boolean
         method:
-          type: string
-          nullable: true
+          type: [string, 'null']

@@ -9,18 +9,21 @@ paths:
   /healthz:
     get:
       summary: Health check
+      security: []
       responses:
         '200':
           description: Healthy
   /ready:
     get:
       summary: Readiness check
+      security: []
       responses:
         '200':
           description: Ready
   /api/authorize:
     get:
       summary: Start authorization code flow
+      security: []
       parameters:
         - name: response_type
           in: query
@@ -74,6 +77,7 @@ paths:
   /api/token:
     post:
       summary: Exchange auth code or refresh token
+      security: []
       requestBody:
         required: true
         content:
@@ -324,14 +328,13 @@ components:
         session_id:
           type: string
         account_id:
-          type: string
-          nullable: true
+          type: [string, 'null']
         permissions:
-          type: array
-          nullable: true
-          items:
-            type: string
+          anyOf:
+            - type: 'null'
+            - type: array
+              items:
+                type: string
         expires_at:
-          type: string
-          nullable: true
+          type: [string, 'null']
           format: date-time
