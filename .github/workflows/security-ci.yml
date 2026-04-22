@@ -31,12 +31,15 @@ jobs:
       matrix:
         include:
           - service: oauth2
+            toolchain: stable
             audit_args: ''
           - service: 2fa
+            toolchain: stable
             # RUSTSEC-2023-0071: rsa Marvin Attack via sqlx-mysql (optional dep,
             # never compiled; only SQLite is used). No upstream patch available.
             audit_args: --ignore RUSTSEC-2023-0071
           - service: staffdb
+            toolchain: stable
             # RUSTSEC-2023-0071: rsa Marvin Attack via sqlx-mysql (optional dep,
             # never compiled; only SQLite is used). No upstream patch available.
             audit_args: --ignore RUSTSEC-2023-0071
@@ -52,7 +55,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.toolchain }}
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
