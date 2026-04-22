@@ -34,10 +34,12 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@e645b0cf01249a4b0404e0248fbf6b432f092ad3
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@a21bda3d3d0ea852a2a89a0a6978b4d0f15477b8
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           workspaces: |
             oauth2

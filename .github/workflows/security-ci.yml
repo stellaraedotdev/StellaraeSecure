@@ -31,12 +31,15 @@ jobs:
       matrix:
         include:
           - service: oauth2
+            toolchain: stable
             audit_args: ''
           - service: 2fa
+            toolchain: stable
             # RUSTSEC-2023-0071: rsa Marvin Attack via sqlx-mysql (optional dep,
             # never compiled; only SQLite is used). No upstream patch available.
             audit_args: --ignore RUSTSEC-2023-0071
           - service: staffdb
+            toolchain: stable
             # RUSTSEC-2023-0071: rsa Marvin Attack via sqlx-mysql (optional dep,
             # never compiled; only SQLite is used). No upstream patch available.
             audit_args: --ignore RUSTSEC-2023-0071
@@ -50,7 +53,9 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@e645b0cf01249a4b0404e0248fbf6b432f092ad3
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: ${{ matrix.toolchain }}
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -65,7 +70,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Trivy filesystem security scan
-        uses: aquasecurity/trivy-action@6e7b7d1feac6b6d0511ae5a28ed1e954671674c7
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           scan-type: 'fs'
           scan-ref: '.'
