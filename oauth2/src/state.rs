@@ -362,6 +362,27 @@ fn load_json_row<T: DeserializeOwned>(
         .transpose()
 }
 
+fn validate_sql_identifier(identifier: &str, kind: &str) -> Result<(), AppError> {
+    let mut chars = identifier.chars();
+    let Some(first) = chars.next() else {
+        return Err(AppError::Internal(format!("invalid SQL {kind}: empty identifier")));
+    };
+
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        return Err(AppError::Internal(format!(
+            "invalid SQL {kind}: {identifier}"
+        )));
+    }
+
+    if !chars.all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+        return Err(AppError::Internal(format!(
+            "invalid SQL {kind}: {identifier}"
+        )));
+    }
+
+    Ok(())
+}
+
 fn take_json_row<T: DeserializeOwned>(
     db: &Arc<Mutex<Connection>>,
     table: &str,
@@ -370,6 +391,8 @@ fn take_json_row<T: DeserializeOwned>(
 ) -> Result<Option<T>, AppError> {
     let record = load_json_row(db, table, key_column, key_value)?;
     if record.is_some() {
+        validate_sql_identifier(table, "table name")?;
+        validate_sql_identifier(key_column, "column name")?;
         let connection = db
             .lock()
             .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
