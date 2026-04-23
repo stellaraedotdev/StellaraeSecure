@@ -114,7 +114,7 @@ impl AppState {
     }
 
     pub fn save_refresh_token(&self, token: &RefreshToken) -> Result<(), AppError> {
-        persist_json_row(&self.db, "refresh_tokens", "token", &token.token, token)
+        self.persist_refresh_token(token)
     }
 
     pub fn persist_admin_audit_event(&self, event: &AdminAuditEvent) -> Result<(), AppError> {
