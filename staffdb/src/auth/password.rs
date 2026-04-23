@@ -5,7 +5,7 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, SaltString},
     Argon2, PasswordVerifier,
 };
-use rand::rngs::OsRng;
+use getrandom::OsRng;
 
 /// Hash a plaintext password with Argon2id
 /// 
