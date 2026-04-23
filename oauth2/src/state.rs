@@ -311,6 +311,20 @@ fn normalize_sqlite_url(database_url: &str) -> String {
     database_url.to_string()
 }
 
+fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
+    if identifier.is_empty()
+        || !identifier
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(AppError::Internal(format!(
+            "invalid SQL identifier: {identifier}"
+        )));
+    }
+
+    Ok(())
+}
+
 fn persist_json_row<T: Serialize>(
     db: &Arc<Mutex<Connection>>,
     table: &str,
@@ -318,6 +332,9 @@ fn persist_json_row<T: Serialize>(
     key_value: &str,
     value: &T,
 ) -> Result<(), AppError> {
+    validate_sql_identifier(table)?;
+    validate_sql_identifier(key_column)?;
+
     let connection = db
         .lock()
         .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
@@ -341,6 +358,9 @@ fn load_json_row<T: DeserializeOwned>(
     key_column: &str,
     key_value: &str,
 ) -> Result<Option<T>, AppError> {
+    validate_sql_identifier(table)?;
+    validate_sql_identifier(key_column)?;
+
     let connection = db
         .lock()
         .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
