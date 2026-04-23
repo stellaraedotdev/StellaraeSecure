@@ -31,12 +31,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af #@v1
+        uses: dtolnay/rust-toolchain@2ca385c197f3201aa80dc04f5be82c4bf9937ec2
         with:
-          profile: minimal
-          toolchain: stable
           components: clippy
-          override: true
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
