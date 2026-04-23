@@ -38,7 +38,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
       - name: Install required cargo
-        run: cargo install clippy-sarif sarif-fmt
+        run: cargo install --locked clippy-sarif sarif-fmt
 
       - name: Run rust-clippy
         run:
