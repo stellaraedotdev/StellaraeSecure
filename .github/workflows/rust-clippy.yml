@@ -50,12 +50,17 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@2ca385c197f3201aa80dc04f5be82c4bf9937ec2
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
           components: clippy
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          workspaces: |
+            oauth2
+            staffdb
+            2fa
 
       - name: Install required cargo
         run: cargo install --locked clippy-sarif sarif-fmt
