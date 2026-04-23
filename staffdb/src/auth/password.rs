@@ -2,10 +2,9 @@
 
 use crate::error::{Error, Result};
 use argon2::{
-    password_hash::{PasswordHash, PasswordHasher, SaltString},
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, SaltString},
     Argon2, PasswordVerifier,
 };
-use rand::rngs::OsRng;
 
 /// Hash a plaintext password with Argon2id
 /// 
