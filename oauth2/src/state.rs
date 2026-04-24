@@ -375,11 +375,11 @@ fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
     };
 
     if !(first == '_' || first.is_ascii_alphabetic()) {
-        return Err(AppError::Internal(format!("invalid SQL identifier: {identifier}")));
+        return Err(AppError::Internal("invalid SQL identifier".to_string()));
     }
 
     if !chars.all(|c| c == '_' || c.is_ascii_alphanumeric()) {
-        return Err(AppError::Internal(format!("invalid SQL identifier: {identifier}")));
+        return Err(AppError::Internal("invalid SQL identifier".to_string()));
     }
 
     Ok(())
