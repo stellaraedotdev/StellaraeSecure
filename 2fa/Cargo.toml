@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 axum = "0.7"
 chrono = { version = "0.4", features = ["serde"] }
-data-encoding = "2.6"
+data-encoding = "2.11"
 hmac = "0.12"
 hex = "0.4"
 rand = "0.9"
