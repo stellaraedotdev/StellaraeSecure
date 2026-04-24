@@ -83,7 +83,7 @@ jobs:
 
       - name: Upload analysis results to GitHub
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@c8eea1c60d45464d77e3b0d9d54aa98c14771fce # v4
         with:
           sarif_file: ${{ matrix.service }}/rust-clippy-results.sarif
           wait-for-processing: true
