@@ -393,8 +393,6 @@ fn take_json_row<T: DeserializeOwned>(
 ) -> Result<Option<T>, AppError> {
     let record = load_json_row(db, table, key_column, key_value)?;
     if record.is_some() {
-        validate_sql_identifier(table)?;
-        validate_sql_identifier(key_column)?;
         let connection = db
             .lock()
             .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
