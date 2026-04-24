@@ -114,7 +114,7 @@ impl AppState {
     }
 
     pub fn save_refresh_token(&self, token: &RefreshToken) -> Result<(), AppError> {
-        persist_json_row(&self.db, "refresh_tokens", "token", &token.token, token)
+        self.persist_refresh_token(token)
     }
 
     pub fn persist_admin_audit_event(&self, event: &AdminAuditEvent) -> Result<(), AppError> {
@@ -318,6 +318,9 @@ fn persist_json_row<T: Serialize>(
     key_value: &str,
     value: &T,
 ) -> Result<(), AppError> {
+    validate_sql_identifier(table)?;
+    validate_sql_identifier(key_column)?;
+
     let connection = db
         .lock()
         .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
@@ -341,6 +344,9 @@ fn load_json_row<T: DeserializeOwned>(
     key_column: &str,
     key_value: &str,
 ) -> Result<Option<T>, AppError> {
+    validate_sql_identifier(table)?;
+    validate_sql_identifier(key_column)?;
+
     let connection = db
         .lock()
         .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
@@ -360,6 +366,26 @@ fn load_json_row<T: DeserializeOwned>(
                 .map_err(|error| AppError::Internal(format!("failed to deserialize record: {error}")))
         })
         .transpose()
+}
+
+fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
+    let mut chars = identifier.chars();
+    let Some(first) = chars.next() else {
+        tracing::warn!("SQL identifier validation failed: empty identifier");
+        return Err(AppError::Internal("invalid SQL identifier".to_string()));
+    };
+
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        tracing::warn!(identifier = identifier, "SQL identifier validation failed: invalid first character");
+        return Err(AppError::Internal("invalid SQL identifier".to_string()));
+    }
+
+    if !chars.all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+        tracing::warn!(identifier = identifier, "SQL identifier validation failed: invalid characters");
+        return Err(AppError::Internal("invalid SQL identifier".to_string()));
+    }
+
+    Ok(())
 }
 
 fn take_json_row<T: DeserializeOwned>(
