@@ -9,6 +9,9 @@ It currently will provide:
 - A 2FA system, which will be used to provide an additional layer of security for our internal applications. This will be implemented using TOTP, and will be integrated with the staff account database and the OAuth2 server, we will not provide an authenticator app at this time. 
 - Hardware security keys (or browser based, like proton pass, etc.) will be supported as a second factor or as a passwordless login method.
 
+## NOTE
+StellaraeSecure currently does **NOT** have an active official service, disregard any mention of an official server. Coming soon.
+
 ## About
 StellaraeSecure is a group of projects in a unified repository, each project can be found in their own directory. The projects are:
 - `staffdb`: The staff account database (and user accounts)
