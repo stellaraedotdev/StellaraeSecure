@@ -371,14 +371,17 @@ fn load_json_row<T: DeserializeOwned>(
 fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
     let mut chars = identifier.chars();
     let Some(first) = chars.next() else {
-        return Err(AppError::Internal("invalid SQL identifier: empty identifier".to_string()));
+        tracing::warn!("SQL identifier validation failed: empty identifier");
+        return Err(AppError::Internal("invalid SQL identifier".to_string()));
     };
 
     if !(first == '_' || first.is_ascii_alphabetic()) {
+        tracing::warn!(identifier = identifier, "SQL identifier validation failed: invalid first character");
         return Err(AppError::Internal("invalid SQL identifier".to_string()));
     }
 
     if !chars.all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+        tracing::warn!(identifier = identifier, "SQL identifier validation failed: invalid characters");
         return Err(AppError::Internal("invalid SQL identifier".to_string()));
     }
 
