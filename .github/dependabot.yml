@@ -6,10 +6,15 @@
 version: 2
 updates:
   - package-ecosystem: "cargo" # See documentation for possible values
-    directories:
-      - "/2fa"
-      - "/oauth2"
-      - "/staffdb"
+    directory: "/2fa"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "cargo"
+    directory: "/oauth2"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "cargo"
+    directory: "/staffdb"
     schedule:
       interval: "daily"
   - package-ecosystem: "npm"
