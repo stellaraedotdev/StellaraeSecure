@@ -52,6 +52,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
+          toolchain: stable
           components: clippy
 
       - name: Cache Rust dependencies
@@ -67,11 +68,22 @@ jobs:
 
       - name: Run rust-clippy
         run: |
-          cargo clippy --all-features --message-format=json | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
+          set -o pipefail
+          cargo clippy --all-targets --all-features --message-format=json \
+            | clippy-sarif \
+            | tee rust-clippy-results.sarif \
+            | sarif-fmt
+
+      - name: Ensure SARIF output exists
+        if: always()
+        run: |
+          if [ ! -f rust-clippy-results.sarif ]; then
+            printf '{"version":"2.1.0","runs":[]}\n' > rust-clippy-results.sarif
+          fi
 
       - name: Upload analysis results to GitHub
         if: always()
-        uses: github/codeql-action/upload-sarif@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ matrix.service }}/rust-clippy-results.sarif
           wait-for-processing: true
