@@ -311,20 +311,6 @@ fn normalize_sqlite_url(database_url: &str) -> String {
     database_url.to_string()
 }
 
-fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
-    if identifier.is_empty()
-        || !identifier
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-    {
-        return Err(AppError::Internal(format!(
-            "invalid SQL identifier: {identifier}"
-        )));
-    }
-
-    Ok(())
-}
-
 fn persist_json_row<T: Serialize>(
     db: &Arc<Mutex<Connection>>,
     table: &str,
@@ -382,22 +368,18 @@ fn load_json_row<T: DeserializeOwned>(
         .transpose()
 }
 
-fn validate_sql_identifier(identifier: &str, kind: &str) -> Result<(), AppError> {
+fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
     let mut chars = identifier.chars();
     let Some(first) = chars.next() else {
-        return Err(AppError::Internal(format!("invalid SQL {kind}: empty identifier")));
+        return Err(AppError::Internal("invalid SQL identifier: empty identifier".to_string()));
     };
 
     if !(first == '_' || first.is_ascii_alphabetic()) {
-        return Err(AppError::Internal(format!(
-            "invalid SQL {kind}: {identifier}"
-        )));
+        return Err(AppError::Internal(format!("invalid SQL identifier: {identifier}")));
     }
 
     if !chars.all(|c| c == '_' || c.is_ascii_alphanumeric()) {
-        return Err(AppError::Internal(format!(
-            "invalid SQL {kind}: {identifier}"
-        )));
+        return Err(AppError::Internal(format!("invalid SQL identifier: {identifier}")));
     }
 
     Ok(())
@@ -411,8 +393,8 @@ fn take_json_row<T: DeserializeOwned>(
 ) -> Result<Option<T>, AppError> {
     let record = load_json_row(db, table, key_column, key_value)?;
     if record.is_some() {
-        validate_sql_identifier(table, "table name")?;
-        validate_sql_identifier(key_column, "column name")?;
+        validate_sql_identifier(table)?;
+        validate_sql_identifier(key_column)?;
         let connection = db
             .lock()
             .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
