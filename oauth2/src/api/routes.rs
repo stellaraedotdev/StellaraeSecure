@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::{sync::OnceLock, time::Instant};
@@ -1202,7 +1202,7 @@ fn verified_staff_actor_id(state: &AppState, headers: &HeaderMap) -> Result<Stri
         return Err(AppError::Authentication);
     }
 
-    let signature = decode_hex(signature_hex)?;
+    let signature: Vec<u8> = decode_hex(signature_hex)?;
 
     let mut mac = HmacSha256::new_from_slice(state.config.staff_identity_hmac_secret.as_bytes())
         .map_err(|_| AppError::Authentication)?;
