@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, Mac};
-use rand::RngCore;
+use rand::Rng;
 use sha1::Sha1;
 
 type HmacSha1 = Hmac<Sha1>;
@@ -12,7 +12,7 @@ const TOTP_SECRET_BYTES: usize = 20;
 
 pub fn generate_totp_secret_base32() -> String {
   let mut secret = [0u8; TOTP_SECRET_BYTES];
-  rand::rng().fill_bytes(&mut secret);
+  rand::thread_rng().fill_bytes(&mut secret);
   BASE32_NOPAD.encode(&secret)
 }
 
