@@ -12,7 +12,7 @@ const TOTP_SECRET_BYTES: usize = 20;
 
 pub fn generate_totp_secret_base32() -> String {
   let mut secret = [0u8; TOTP_SECRET_BYTES];
-  rand::thread_rng().fill_bytes(&mut secret);
+  rand::rng().try_fill_bytes(&mut secret).map_err(|_| Error::InternalServerError)?;
   BASE32_NOPAD.encode(&secret)
 }
 
