@@ -38,7 +38,7 @@ sha1 = "0.10"
 data-encoding = "2.6"
 
 # Error handling
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Configuration
 dotenvy = "0.15"
