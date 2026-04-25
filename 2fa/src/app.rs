@@ -12,7 +12,7 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use data_encoding::BASE32_NOPAD;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
@@ -565,7 +565,7 @@ async fn verify_hsk_challenge(
 
 fn generate_totp_secret_base32() -> String {
     let mut secret = [0u8; 20];
-    rand::thread_rng().fill_bytes(&mut secret);
+    rand::rng().fill_bytes(&mut secret);
     BASE32_NOPAD.encode(&secret)
 }
 
