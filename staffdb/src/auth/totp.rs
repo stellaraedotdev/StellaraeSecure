@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, Mac};
-use rand::RngCore;
+use rand::Rng;
 use sha1::Sha1;
 
 type HmacSha1 = Hmac<Sha1>;
