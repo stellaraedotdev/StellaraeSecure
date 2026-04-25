@@ -35,7 +35,7 @@ hex = "0.4"
 rand = "0.9"
 hmac = "0.12"
 sha1 = "0.10"
-data-encoding = "2.6"
+data-encoding = "2.11"
 
 # Error handling
 thiserror = "2.0"
