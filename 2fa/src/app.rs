@@ -13,7 +13,7 @@ use axum::{
 use chrono::{Duration, Utc};
 use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, KeyInit, Mac};
-use rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
