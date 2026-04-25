@@ -13,7 +13,7 @@ tokio = { version = "1.36", features = ["full"] }
 
 # Web framework
 axum = "0.7"
-tower = "0.4"
+tower = "0.5"
 tower-http = { version = "0.5", features = ["trace", "cors"] }
 
 # Serialization
@@ -35,10 +35,10 @@ hex = "0.4"
 rand = "0.9"
 hmac = "0.12"
 sha1 = "0.10"
-data-encoding = "2.6"
+data-encoding = "2.11"
 
 # Error handling
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Configuration
 dotenvy = "0.15"
