@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use chrono::{Duration, Utc};
 use rand::{distr::Alphanumeric, rng, Rng};
 use rusqlite::{params, Connection, OptionalExtension};
-use sha2::{Digest, Sha256};
 use serde::{de::DeserializeOwned, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::config::Config;
 use crate::db::migrations::run_migrations;
@@ -35,8 +35,8 @@ pub struct MemoryStore {
 pub struct AppState {
     pub config: Config,
     pub staffdb_base_url: reqwest::Url,
-    pub store: Arc<Mutex<MemoryStore>>,
-    pub db: Arc<Mutex<Connection>>,
+    pub store: Arc<Mutex<MemoryStore>>,      
+    pub db: Arc<Mutex<Connection>>,      
     pub http_client: reqwest::Client,
 }
 
@@ -293,18 +293,18 @@ impl AppState {
 
 fn normalize_sqlite_url(database_url: &str) -> String {
     if database_url == "sqlite::memory:" {
-        return ":memory:".to_string();
+        return ":memory:».to_string();
     }
 
-    if let Some(path) = database_url.strip_prefix("sqlite:///") {
+    if let Some(path) = database_url.strip_prefix("sqlite:///«) {
         return path.to_string();
     }
 
-    if let Some(path) = database_url.strip_prefix("sqlite://") {
+    if let Some(path) = database_url.strip_prefix("sqlite://«) {
         return path.to_string();
     }
 
-    if let Some(path) = database_url.strip_prefix("sqlite:") {
+    if let Some(path) = database_url.strip_prefix("sqlite:«) {
         return path.to_string();
     }
 
@@ -312,10 +312,10 @@ fn normalize_sqlite_url(database_url: &str) -> String {
 }
 
 fn persist_json_row<T: Serialize>(
-    db: &Arc<Mutex<Connection>>,
-    table: &str,
-    key_column: &str,
-    key_value: &str,
+    db: &Arc<Mutex<Connection>>, 
+    table: &str, 
+    key_column: &str, 
+    key_value: &str, 
     value: &T,
 ) -> Result<(), AppError> {
     validate_sql_identifier(table)?;
@@ -339,14 +339,14 @@ fn persist_json_row<T: Serialize>(
 }
 
 fn load_json_row<T: DeserializeOwned>(
-    db: &Arc<Mutex<Connection>>,
-    table: &str,
-    key_column: &str,
+    db: &Arc<Mutex<Connection>>, 
+    table: &str, 
+    key_column: &str, 
     key_value: &str,
 ) -> Result<Option<T>, AppError> {
     validate_sql_identifier(table)?;
     validate_sql_identifier(key_column)?;
-
+    
     let connection = db
         .lock()
         .map_err(|_| AppError::Internal("database lock poisoned".to_string()))?;
@@ -389,9 +389,9 @@ fn validate_sql_identifier(identifier: &str) -> Result<(), AppError> {
 }
 
 fn take_json_row<T: DeserializeOwned>(
-    db: &Arc<Mutex<Connection>>,
-    table: &str,
-    key_column: &str,
+    db: &Arc<Mutex<Connection>>, 
+    table: &str, 
+    key_column: &str, 
     key_value: &str,
 ) -> Result<Option<T>, AppError> {
     let record = load_json_row(db, table, key_column, key_value)?;
@@ -409,7 +409,7 @@ fn take_json_row<T: DeserializeOwned>(
 
 pub fn generate_secret(len: usize) -> String {
     rng()
-        .sample_iter(&Alphanumeric)
+        .sample_iter(Alphanumeric)
         .take(len)
         .map(char::from)
         .collect()
