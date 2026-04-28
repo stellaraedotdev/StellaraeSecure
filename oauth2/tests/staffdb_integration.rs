@@ -117,7 +117,7 @@ async fn lookup_account_uses_expected_query_and_auth_header() {
 #[tokio::test]
 async fn get_account_by_id_hits_expected_path() {
     let router = Router::new().route(
-        "/api/accounts/:account_id",
+        "/api/accounts/{account_id}", // No longer compat with axum 1.7.x <=
         get(|Path(account_id): Path<String>, headers: HeaderMap| async move {
             let authorization = headers
                 .get("authorization")
@@ -156,7 +156,7 @@ async fn get_account_by_id_hits_expected_path() {
 #[tokio::test]
 async fn get_effective_permissions_parses_permission_payload() {
     let router = Router::new().route(
-        "/api/rbac/accounts/:account_id/permissions/effective",
+        "/api/rbac/accounts/{account_id}/permissions/effective", //NOTE: No compat axum >= 1.7.x
         get(|Path(account_id): Path<String>, headers: HeaderMap| async move {
             let authorization = headers
                 .get("authorization")
