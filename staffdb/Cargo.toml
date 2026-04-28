@@ -9,7 +9,7 @@ repository = "https://github.com/stellarae/StellaraeSecure"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.36", features = ["full"] }
+tokio = { version = "1.52", features = ["full"] }
 
 # Web framework
 axum = "0.7"
