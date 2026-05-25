@@ -3,7 +3,7 @@
 The most recent version of this file can be found [here](https://github.com/stellaraedotdev/Standards/blob/main/guidelines/contributing.md)
 This project pre-dates this document. Expect messy code and a future overhaul
 
-This is a rough guideline, all guides and policies can be found [at our standards repo](https://github/com/stellaraedotdev/Standards/)
+This is a rough guideline, all guides and policies can be found [at our standards repo](https://github.com/stellaraedotdev/Standards/)
 
 ## REPOSITORY SPECIFIC REFERENCES
 1. [Stellarae standard RUST guidelines](https://github.com/stellaraedotdev/Standards/blob/main/styleguides/rust.md)
