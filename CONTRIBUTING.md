@@ -8,7 +8,7 @@ This is a rough guideline, all guides and policies can be found [at our standard
 ## REPOSITORY SPECIFIC REFERENCES
 1. [Stellarae standard RUST guidelines](https://github.com/stellaraedotdev/Standards/blob/main/styleguides/rust.md)
 2. [Stellarae TypeScript guidelines](https://github.com/stellaraedotdev/Standards/blob/main/styleguides/typescript.md)
-3. Other minor filetypes (CSS, etc can be found [here](https://github.com/stellaraedotdev/Standards/tree/main/styleguides)
+3. Other minor filetypes (CSS, etc) can be found [here](https://github.com/stellaraedotdev/Standards/tree/main/styleguides)
 ## Contribution Flow
 1. Open or select a tracked issue with clear acceptance criteria.
 2. Create a focused branch from the default branch.
